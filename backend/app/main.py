@@ -25,7 +25,8 @@ from app.core.data_2026 import (
 from app.ml.poisson_model import predict_match
 from app.ml.inference import predict_outcome_ml, has_model, model_name
 from app.ml.power_rating import power_ratings, power_of
-from app.simulation.monte_carlo import run_simulations
+from app.simulation.monte_carlo import run_simulations, run_parlay, STAGE_RANK
+from pydantic import BaseModel, Field
 
 app = FastAPI(title="World Cup 2026 Prediction Platform", version="0.1.0")
 
@@ -133,3 +134,28 @@ def predict_ml(home: str = Query(...), away: str = Query(...), neutral: bool = T
 def simulate(n: int = Query(50000, ge=1000, le=200000)):
     """Monte Carlo tournament simulation (tournament-first power ratings)."""
     return run_simulations(n=n, seed=42)
+
+
+class ParlayLeg(BaseModel):
+    team: str
+    market: str = Field(description="advance | r16 | quarter | semi | final | title")
+
+
+class ParlayRequest(BaseModel):
+    legs: list[ParlayLeg] = Field(min_length=1, max_length=10)
+    n: int = Field(default=50000, ge=1000, le=200000)
+
+
+@app.post("/parlay")
+def parlay(req: ParlayRequest):
+    """
+    Joint probability that ALL legs hit, from the Monte Carlo (correlation-aware).
+    Each leg: a team reaching a stage (advance/r16/quarter/semi/final/title).
+    """
+    for leg in req.legs:
+        if leg.team not in ELO:
+            raise HTTPException(404, f"Unknown team: {leg.team}")
+        if leg.market not in STAGE_RANK or leg.market == "none":
+            raise HTTPException(422, f"Bad market '{leg.market}'. Use advance|r16|quarter|semi|final|title")
+    legs = [{"team": l.team, "market": l.market} for l in req.legs]
+    return run_parlay(legs, n=req.n, seed=42)

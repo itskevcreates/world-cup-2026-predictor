@@ -55,6 +55,42 @@ export default function Home() {
   const [powers, setPowers] = useState<Power[]>([]);
   const [loadingSim, setLoadingSim] = useState(false);
 
+  // parlay builder
+  const MARKETS = [
+    { v: "advance", l: "to reach Round of 32" },
+    { v: "r16", l: "to reach Round of 16" },
+    { v: "quarter", l: "to reach Quarterfinal" },
+    { v: "semi", l: "to reach Semifinal" },
+    { v: "final", l: "to reach Final" },
+    { v: "title", l: "to win the World Cup" },
+  ];
+  const [legs, setLegs] = useState<{ team: string; market: string }[]>([
+    { team: "France", market: "title" },
+    { team: "Brazil", market: "semi" },
+  ]);
+  const [parlay, setParlay] = useState<any>(null);
+  const [loadingParlay, setLoadingParlay] = useState(false);
+
+  function setLeg(i: number, field: "team" | "market", val: string) {
+    setLegs((ls) => ls.map((l, j) => (j === i ? { ...l, [field]: val } : l)));
+  }
+  function addLeg() {
+    setLegs((ls) => [...ls, { team: teams[0]?.team || "Spain", market: "quarter" }]);
+  }
+  function removeLeg(i: number) {
+    setLegs((ls) => ls.filter((_, j) => j !== i));
+  }
+  async function calcParlay() {
+    setLoadingParlay(true);
+    const r = await fetch(`${API}/parlay`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ legs, n: 50000 }),
+    });
+    setParlay(await r.json());
+    setLoadingParlay(false);
+  }
+
   useEffect(() => {
     fetch(`${API}/teams`).then((r) => r.json()).then(setTeams).catch(() => {});
     fetch(`${API}/power`).then((r) => r.json()).then(setPowers).catch(() => {});
@@ -176,6 +212,78 @@ export default function Home() {
           )}
         </section>
       </div>
+
+      {/* Parlay builder */}
+      <section className="bg-card border border-[#243056] rounded-2xl p-5 mt-4">
+        <h2 className="font-semibold mb-1">Parlay Simulator</h2>
+        <p className="text-muted text-xs mb-3">
+          Combine multiple outcomes. The joint probability is computed from 50,000
+          tournament simulations, so correlated legs (same team/bracket) are priced
+          correctly — not a naive multiply.
+        </p>
+
+        <div className="space-y-2">
+          {legs.map((leg, i) => (
+            <div key={i} className="flex flex-wrap gap-2 items-center">
+              <select className="bg-[#0e1530] border border-[#2c3a66] rounded-lg px-3 py-2"
+                value={leg.team} onChange={(e) => setLeg(i, "team", e.target.value)}>
+                {teams.map((t) => <option key={t.team} value={t.team}>{t.team}</option>)}
+              </select>
+              <select className="bg-[#0e1530] border border-[#2c3a66] rounded-lg px-3 py-2 flex-1"
+                value={leg.market} onChange={(e) => setLeg(i, "market", e.target.value)}>
+                {MARKETS.map((m) => <option key={m.v} value={m.v}>{m.l}</option>)}
+              </select>
+              <button onClick={() => removeLeg(i)} aria-label="remove"
+                className="text-muted hover:text-red-400 px-2 text-lg leading-none">×</button>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2 mt-3">
+          <button onClick={addLeg}
+            className="border border-[#2c3a66] text-muted rounded-lg px-3 py-2 text-sm">+ Add leg</button>
+          <button onClick={calcParlay} disabled={loadingParlay || legs.length === 0}
+            className="bg-accent text-[#04231a] font-bold rounded-lg px-4 py-2 disabled:opacity-60">
+            {loadingParlay ? "Simulating…" : "Calculate Parlay"}
+          </button>
+        </div>
+
+        {parlay && (
+          <div className="mt-4 border-t border-[#1d2747] pt-4">
+            <table className="w-full text-sm mb-3">
+              <tbody>
+                {parlay.legs.map((l: any, i: number) => (
+                  <tr key={i} className="border-b border-[#1d2747]">
+                    <td className="py-1.5">{l.team}</td>
+                    <td className="text-muted">{MARKETS.find((m) => m.v === l.market)?.l}</td>
+                    <td className="text-right tabular-nums">{(l.probability * 100).toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex items-end justify-between">
+              <div>
+                <div className="text-muted text-xs">Parlay hits (all legs)</div>
+                <div className="text-3xl font-bold text-accent tabular-nums">
+                  {(parlay.parlay_probability * 100).toFixed(2)}%
+                </div>
+              </div>
+              <div className="text-right text-sm">
+                <div className="text-muted text-xs">Fair odds</div>
+                <div className="tabular-nums">{parlay.fair_decimal_odds}× &nbsp;
+                  <span className="text-muted">
+                    ({parlay.fair_american_odds > 0 ? "+" : ""}{parlay.fair_american_odds})
+                  </span>
+                </div>
+              </div>
+            </div>
+            <p className="text-muted text-[11px] mt-2">
+              Naive independent product would say {(parlay.naive_independent_product * 100).toFixed(2)}% —
+              the simulation captures correlation between legs.
+            </p>
+          </div>
+        )}
+      </section>
 
       {/* Dynamic power ratings */}
       {powers.length > 0 && (

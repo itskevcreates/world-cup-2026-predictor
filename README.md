@@ -74,6 +74,14 @@ cd frontend-next && npm install && npm run dev   # http://localhost:3000
 | GET | `/predict?home=Germany&away=Argentina&rating=power` | match prediction (power rating, default; `rating=elo` for the prior) |
 | GET | `/predict_ml?home=Spain&away=Brazil` | trained gradient-boosting outcome odds (feeds real form) |
 | GET | `/simulate?n=100000` | Monte Carlo (tournament-first), round-by-round odds |
+| POST | `/parlay` | joint probability that several legs all hit (correlation-aware) |
+
+### Parlay simulator
+`POST /parlay` with legs like `{"team":"France","market":"title"}` (markets:
+`advance, r16, quarter, semi, final, title`). It runs 50k tournament simulations and
+returns the **joint** probability all legs hit plus fair decimal/American odds —
+computed from the simulation, so correlated legs (same team or bracket path) are priced
+correctly instead of a naive multiply. Available in the dashboard as the Parlay Simulator.
 
 ## Dynamic power rating
 The headline rating blends **squad talent (25%) + Elo (20%) + recent form (15%) +

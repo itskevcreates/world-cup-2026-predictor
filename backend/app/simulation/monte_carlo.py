@@ -116,6 +116,86 @@ def simulate_once(rng: random.Random, reached: dict):
     return champion, set(qualifiers)
 
 
+# ---------------------------------------------------------------------------
+# Parlay support: evaluate multiple tournament outcomes JOINTLY, so correlated
+# legs ("France reach final" + "France win it") are priced correctly — we count
+# the fraction of simulated tournaments in which every leg actually happens,
+# rather than naively multiplying individual probabilities.
+# ---------------------------------------------------------------------------
+STAGE_RANK = {"none": 0, "advance": 1, "r16": 2, "quarter": 3, "semi": 4, "final": 5, "title": 6}
+_SIZE_STAGE = {16: "r16", 8: "quarter", 4: "semi", 2: "final", 1: "title"}
+
+
+def _simulate_stages(rng: random.Random) -> dict:
+    """One tournament; returns {team: furthest stage reached}."""
+    winners, runners, thirds = _simulate_groups(rng)
+    qualifiers = winners + runners + thirds
+    reached = {t: "advance" for t in qualifiers}     # all 32 reached the round of 32
+    bracket = qualifiers[:]
+    rng.shuffle(bracket)
+    while len(bracket) > 1:
+        nxt = []
+        for i in range(0, len(bracket), 2):
+            _, _, w = _play(bracket[i], bracket[i + 1], rng, knockout=True)
+            nxt.append(w)
+        bracket = nxt
+        st = _SIZE_STAGE.get(len(bracket))
+        if st:
+            for t in bracket:
+                reached[t] = st
+    return reached
+
+
+def run_parlay(legs: list[dict], n: int = 50000, seed: int | None = 42) -> dict:
+    """
+    legs: [{"team": "France", "market": "title"}, {"team": "Brazil", "market": "semi"}, ...]
+    market ∈ advance | r16 | quarter | semi | final | title.
+
+    Returns each leg's individual probability, the JOINT (parlay) probability, the
+    naive independent product (for contrast), and fair decimal/American odds.
+    """
+    rng = random.Random(seed)
+    leg_hits = [0] * len(legs)
+    joint_hits = 0
+    for _ in range(n):
+        reached = _simulate_stages(rng)
+        all_ok = True
+        for i, leg in enumerate(legs):
+            need = STAGE_RANK[leg["market"]]
+            got = STAGE_RANK.get(reached.get(leg["team"], "none"), 0)
+            ok = got >= need
+            leg_hits[i] += ok
+            all_ok = all_ok and ok
+        joint_hits += all_ok
+
+    individual = [h / n for h in leg_hits]
+    joint = joint_hits / n
+    naive = 1.0
+    for p in individual:
+        naive *= p
+
+    def american(p):
+        if p <= 0:
+            return None
+        return round(-100 * p / (1 - p)) if p > 0.5 else round(100 * (1 - p) / p)
+
+    return {
+        "simulations": n,
+        "legs": [
+            {"team": leg["team"], "market": leg["market"], "probability": round(individual[i], 4)}
+            for i, leg in enumerate(legs)
+        ],
+        "parlay_probability": round(joint, 4),
+        "naive_independent_product": round(naive, 4),
+        "correlation_note": (
+            "Joint probability accounts for correlation between legs; it differs from the "
+            "naive product when legs involve the same team or bracket path."
+        ),
+        "fair_decimal_odds": round(1 / joint, 2) if joint > 0 else None,
+        "fair_american_odds": american(joint),
+    }
+
+
 def run_simulations(n: int = 10000, seed: int | None = None) -> dict:
     """Run n tournament simulations; return aggregated round-by-round probabilities."""
     rng = random.Random(seed)
