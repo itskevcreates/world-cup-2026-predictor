@@ -1,5 +1,8 @@
 # World Cup 2026 Prediction Platform
 
+**🔮 Live demo:** https://world-cup-2026-predictor-seven.vercel.app
+&nbsp;·&nbsp; **API docs:** https://world-cup-2026-predictor-production-65ad.up.railway.app/docs
+
 ![Dashboard hero](docs/hero.png)
 
 An AI-powered platform that predicts **FIFA World Cup 2026** (USA · Mexico · Canada)
