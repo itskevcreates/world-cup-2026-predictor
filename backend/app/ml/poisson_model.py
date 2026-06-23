@@ -21,7 +21,9 @@ from app.core.data_2026 import get_strength
 
 # --- model constants (tuned to realistic international scoring) ---------------
 BASE_GOALS = 1.35     # avg goals a balanced team scores in a WC match
-ELO_SCALE = 360.0     # how sharply Elo gap converts to goals (smaller = sharper)
+ELO_SCALE = 620.0     # how sharply Elo gap converts to goals (smaller = sharper).
+                      # Tuned so the favourite sits ~19% (realistic for a 48-team WC),
+                      # contenders cluster behind, and dark horses keep a live chance.
 MAX_GOALS = 10        # truncate the scoreline grid here (P beyond is negligible)
 
 

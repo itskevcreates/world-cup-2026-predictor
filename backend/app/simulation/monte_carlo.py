@@ -86,43 +86,64 @@ def _simulate_groups(rng: random.Random):
     return list(winners.values()), list(runners.values()), best_thirds
 
 
-def _knockout(qualifiers: list[str], rng: random.Random) -> str:
-    """Single-elimination from 32 -> champion. Bracket seeded by shuffling."""
+def _knockout(qualifiers: list[str], rng: random.Random, reached: dict) -> str:
+    """Single-elimination from 32 -> champion. Records how far each team gets."""
     bracket = qualifiers[:]
     rng.shuffle(bracket)
+    # stage label keyed by how many teams remain at the start of a round
+    stage = {16: "r16", 8: "quarter", 4: "semi", 2: "final"}
     while len(bracket) > 1:
         nxt = []
         for i in range(0, len(bracket), 2):
             _, _, w = _play(bracket[i], bracket[i + 1], rng, knockout=True)
             nxt.append(w)
         bracket = nxt
+        label = stage.get(len(bracket))
+        if label:
+            for t in bracket:
+                reached[label][t] += 1
     return bracket[0]
 
 
-def simulate_once(rng: random.Random):
+def simulate_once(rng: random.Random, reached: dict):
     winners, runners, thirds = _simulate_groups(rng)
     qualifiers = winners + runners + thirds  # 12 + 12 + 8 = 32
-    champion = _knockout(qualifiers, rng)
+    champion = _knockout(qualifiers, rng, reached)
     return champion, set(qualifiers)
 
 
 def run_simulations(n: int = 10000, seed: int | None = None) -> dict:
-    """Run n tournament simulations; return aggregated probabilities."""
+    """Run n tournament simulations; return aggregated round-by-round probabilities."""
     rng = random.Random(seed)
     titles = defaultdict(int)
-    last16 = defaultdict(int)
+    advance = defaultdict(int)
+    reached = {k: defaultdict(int) for k in ("r16", "quarter", "semi", "final")}
     for _ in range(n):
-        champ, qualifiers = simulate_once(rng)
+        champ, qualifiers = simulate_once(rng, reached)
         titles[champ] += 1
         for t in qualifiers:
-            last16[t] += 1
+            advance[t] += 1
 
-    title_probs = sorted(
-        ({"team": t, "title_pct": round(100 * c / n, 1)} for t, c in titles.items()),
-        key=lambda x: x["title_pct"], reverse=True,
-    )
-    advance_probs = sorted(
-        ({"team": t, "advance_pct": round(100 * c / n, 1)} for t, c in last16.items()),
-        key=lambda x: x["advance_pct"], reverse=True,
-    )
-    return {"simulations": n, "title_odds": title_probs, "advance_odds": advance_probs}
+    def pct(c):
+        return round(100 * c / n, 1)
+
+    # one consolidated table: every team that ever advanced, with full path odds
+    teams = set(advance) | set(titles)
+    table = [{
+        "team": t,
+        "advance_pct": pct(advance[t]),
+        "quarter_pct": pct(reached["quarter"][t]),
+        "semi_pct": pct(reached["semi"][t]),
+        "final_pct": pct(reached["final"][t]),
+        "title_pct": pct(titles[t]),
+    } for t in teams]
+    table.sort(key=lambda x: (x["title_pct"], x["semi_pct"], x["advance_pct"]), reverse=True)
+
+    return {
+        "simulations": n,
+        "title_odds": [{"team": r["team"], "title_pct": r["title_pct"]} for r in table],
+        "advance_odds": sorted(
+            ({"team": t, "advance_pct": pct(c)} for t, c in advance.items()),
+            key=lambda x: x["advance_pct"], reverse=True),
+        "outlook": table,  # full round-by-round odds for the polished UI
+    }

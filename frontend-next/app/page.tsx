@@ -12,7 +12,21 @@ type Prediction = {
   probabilities: { home_win: number; draw: number; away_win: number };
   most_likely_scorelines: { score: string; prob: number }[];
 };
-type TitleOdds = { team: string; title_pct: number };
+type Outlook = {
+  team: string;
+  advance_pct: number;
+  quarter_pct: number;
+  semi_pct: number;
+  final_pct: number;
+  title_pct: number;
+};
+
+function tier(pct: number) {
+  if (pct >= 10) return { label: "Favorite", color: "#22d3a6" };
+  if (pct >= 3) return { label: "Contender", color: "#5b9dff" };
+  if (pct > 0) return { label: "Dark horse", color: "#c084fc" };
+  return { label: "Outsider", color: "#64748b" };
+}
 
 function Bar({ pct, label }: { pct: number; label: string }) {
   return (
@@ -33,7 +47,7 @@ export default function Home() {
   const [home, setHome] = useState("Spain");
   const [away, setAway] = useState("Brazil");
   const [pred, setPred] = useState<Prediction | null>(null);
-  const [odds, setOdds] = useState<TitleOdds[]>([]);
+  const [outlook, setOutlook] = useState<Outlook[]>([]);
   const [loadingSim, setLoadingSim] = useState(false);
 
   useEffect(() => {
@@ -49,7 +63,7 @@ export default function Home() {
     setLoadingSim(true);
     const r = await fetch(`${API}/simulate?n=10000`);
     const d = await r.json();
-    setOdds(d.title_odds.slice(0, 12));
+    setOutlook((d.outlook as Outlook[]).filter((t) => t.title_pct > 0).slice(0, 20));
     setLoadingSim(false);
   }
 
@@ -98,32 +112,61 @@ export default function Home() {
 
         {/* Simulation */}
         <section className="bg-card border border-[#243056] rounded-2xl p-5">
-          <h2 className="font-semibold mb-3">Tournament Simulation</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold">Title Outlook</h2>
+            {outlook.length > 0 && (
+              <span className="text-muted text-xs">10,000 simulations</span>
+            )}
+          </div>
           <button onClick={simulate} disabled={loadingSim}
-            className="bg-accent text-[#04231a] font-bold rounded-lg px-4 py-2">
-            {loadingSim ? "Running 10,000 sims…" : "Run Monte Carlo (10,000)"}
+            className="bg-accent text-[#04231a] font-bold rounded-lg px-4 py-2 disabled:opacity-60">
+            {loadingSim ? "Running 10,000 sims…" : "Run Monte Carlo"}
           </button>
-          {odds.length > 0 && (
-            <table className="w-full mt-4 text-sm">
-              <thead>
-                <tr className="text-muted text-left">
-                  <th className="py-1">Team</th><th>Title chance</th><th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {odds.map((o) => (
-                  <tr key={o.team}>
-                    <td className="py-1">{o.team}</td>
-                    <td className="w-1/2">
-                      <div className="h-2 rounded bg-[#0e1530] overflow-hidden">
-                        <div className="h-full bg-accent" style={{ width: `${Math.min(100, o.title_pct * 3)}%` }} />
-                      </div>
-                    </td>
-                    <td className="tabular-nums">{o.title_pct}%</td>
+
+          {outlook.length > 0 && (
+            <>
+              <div className="flex gap-3 text-xs mt-4 mb-2">
+                <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-full" style={{ background: "#22d3a6" }} />Favorite</span>
+                <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-full" style={{ background: "#5b9dff" }} />Contender</span>
+                <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-full" style={{ background: "#c084fc" }} />Dark horse</span>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-muted text-left text-xs">
+                    <th className="py-1 font-medium">Team</th>
+                    <th className="font-medium text-right">SF</th>
+                    <th className="font-medium text-right">Final</th>
+                    <th className="font-medium pl-3">Win</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {outlook.map((o, i) => {
+                    const t = tier(o.title_pct);
+                    const max = outlook[0].title_pct;
+                    return (
+                      <tr key={o.team} className="border-t border-[#1d2747]">
+                        <td className="py-1.5">
+                          <span className="text-muted mr-2 tabular-nums">{i + 1}</span>
+                          {o.team}
+                          <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full"
+                            style={{ background: `${t.color}22`, color: t.color }}>{t.label}</span>
+                        </td>
+                        <td className="text-right tabular-nums text-muted">{o.semi_pct}%</td>
+                        <td className="text-right tabular-nums text-muted">{o.final_pct}%</td>
+                        <td className="pl-3">
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 rounded bg-[#0e1530] overflow-hidden flex-1 min-w-[60px]">
+                              <div className="h-full rounded" style={{ width: `${(o.title_pct / max) * 100}%`, background: t.color }} />
+                            </div>
+                            <span className="tabular-nums w-12 text-right font-medium">{o.title_pct}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </>
           )}
         </section>
       </div>
