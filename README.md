@@ -1,4 +1,6 @@
-# FIFA World Cup 2026 Prediction Platform
+# World Cup 2026 Prediction Platform
+
+![Dashboard hero](docs/hero.png)
 
 An AI-powered platform that predicts **FIFA World Cup 2026** (USA · Mexico · Canada)
 outcomes — match results, scorelines, knockout qualification, and the tournament
@@ -6,6 +8,8 @@ winner — using a Poisson/Elo prediction model and a Monte Carlo simulation eng
 
 Built on **real, live tournament data** (group compositions + standings as of
 June 23, 2026, while the group stage is in progress).
+
+![Parlay simulator and power ratings](docs/dashboard.png)
 
 ## What it does
 - **Match predictor** — win/draw/loss probabilities + most likely scorelines for any
@@ -18,11 +22,9 @@ June 23, 2026, while the group stage is in progress).
 ## Tech Stack
 - **Backend / API:** Python, FastAPI
 - **Modelling & Simulation:** Poisson scoreline model, Elo ratings, Monte Carlo
-- **Frontend:** single-page dashboard (HTML/JS) calling the API
+- **Frontend:** Next.js 14 + TypeScript + Tailwind (dark dashboard, Fira Sans/Fira Code)
 - **Trained ML:** scikit-learn (LogisticRegression + HistGradientBoosting) on 49k real matches
 - **Database:** SQLAlchemy (PostgreSQL-ready, SQLite by default)
-- **Frontend:** Next.js 14 + TypeScript + Tailwind (`frontend-next/`), plus a zero-build
-  HTML dashboard (`frontend/index.html`)
 
 ## Project layout
 ```
@@ -128,8 +130,7 @@ into Postgres on startup.
   can be refined.
 - The knockout bracket is seeded by shuffling the 32 qualifiers (a simplification of
   the exact official R32 mapping); title odds still reflect team strength.
-- Next steps: persist data in PostgreSQL, train gradient-boosted models (XGBoost/
-  LightGBM/CatBoost) on historical results, and rebuild the UI in Next.js.
+- XGBoost is selected automatically in Docker where `libgomp1` is available.
 
 ## Status
 🟢 Working vertical slice — real data → model → simulation → API → dashboard.
