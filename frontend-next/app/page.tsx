@@ -12,6 +12,10 @@ type Prediction = {
   probabilities: { home_win: number; draw: number; away_win: number };
   most_likely_scorelines: { score: string; prob: number }[];
 };
+type Power = {
+  team: string; power: number; attack: number; defense: number;
+  momentum: number; schedule_strength: number; tournament_elo: number;
+};
 type Outlook = {
   team: string;
   advance_pct: number;
@@ -48,10 +52,12 @@ export default function Home() {
   const [away, setAway] = useState("Brazil");
   const [pred, setPred] = useState<Prediction | null>(null);
   const [outlook, setOutlook] = useState<Outlook[]>([]);
+  const [powers, setPowers] = useState<Power[]>([]);
   const [loadingSim, setLoadingSim] = useState(false);
 
   useEffect(() => {
     fetch(`${API}/teams`).then((r) => r.json()).then(setTeams).catch(() => {});
+    fetch(`${API}/power`).then((r) => r.json()).then(setPowers).catch(() => {});
   }, []);
 
   async function predict() {
@@ -171,8 +177,47 @@ export default function Home() {
         </section>
       </div>
 
+      {/* Dynamic power ratings */}
+      {powers.length > 0 && (
+        <section className="bg-card border border-[#243056] rounded-2xl p-5 mt-4">
+          <h2 className="font-semibold mb-1">Dynamic Power Ratings</h2>
+          <p className="text-muted text-xs mb-3">
+            Tournament-first: 60% current 2026 performance (opponent-adjusted, dominance,
+            momentum), 40% prior. Reputation no longer decides the order.
+          </p>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-muted text-left text-xs">
+                <th className="py-1 font-medium">#</th>
+                <th className="font-medium">Team</th>
+                <th className="font-medium text-right">Power</th>
+                <th className="font-medium text-right">Atk</th>
+                <th className="font-medium text-right">Def</th>
+                <th className="font-medium text-right">Mom.</th>
+                <th className="font-medium text-right">SOS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {powers.slice(0, 14).map((p, i) => (
+                <tr key={p.team} className="border-t border-[#1d2747]">
+                  <td className="py-1.5 text-muted tabular-nums">{i + 1}</td>
+                  <td>{p.team}</td>
+                  <td className="text-right tabular-nums font-medium">{p.power.toFixed(0)}</td>
+                  <td className="text-right tabular-nums text-muted">{p.attack.toFixed(0)}</td>
+                  <td className="text-right tabular-nums text-muted">{p.defense.toFixed(0)}</td>
+                  <td className="text-right tabular-nums" style={{ color: p.momentum >= 0 ? "#22d3a6" : "#f87171" }}>
+                    {p.momentum >= 0 ? "+" : ""}{p.momentum.toFixed(0)}
+                  </td>
+                  <td className="text-right tabular-nums text-muted">{p.schedule_strength.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
       <p className="text-muted text-xs mt-6 text-center">
-        Data as of June 23, 2026 · Elo learned from 49k historical matches · API: {API}
+        Data as of June 23, 2026 · power ratings from live 2026 results · API: {API}
       </p>
     </main>
   );

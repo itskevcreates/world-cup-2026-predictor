@@ -24,6 +24,7 @@ from app.core.data_2026 import (
 )
 from app.ml.poisson_model import predict_match
 from app.ml.inference import predict_outcome_ml, has_model, model_name
+from app.ml.power_rating import power_ratings, power_of
 from app.simulation.monte_carlo import run_simulations
 
 app = FastAPI(title="World Cup 2026 Prediction Platform", version="0.1.0")
@@ -64,10 +65,36 @@ def groups():
 
 
 @app.get("/predict")
-def predict(home: str = Query(...), away: str = Query(...), use_form: bool = True):
+def predict(home: str = Query(...), away: str = Query(...),
+           rating: str = Query("power", pattern="^(power|elo)$")):
+    """Match prediction. rating=power (tournament-first, default) or elo (form-adjusted)."""
     if home not in ELO or away not in ELO:
         raise HTTPException(404, "Unknown team. Check /teams for valid names.")
-    return predict_match(home, away, use_form=use_form).as_dict()
+    fn = power_of if rating == "power" else None
+    out = predict_match(home, away, rating_fn=fn).as_dict()
+    out["rating_system"] = rating
+    return out
+
+
+@app.get("/power")
+def power(team: str | None = None):
+    """Dynamic power ratings (tournament-first). Optionally filter to one team."""
+    ratings = power_ratings()
+    if team:
+        if team not in ratings:
+            raise HTTPException(404, "Unknown team. Check /teams for valid names.")
+        r = ratings[team]
+        return {
+            "team": r.team, "power": r.power, "attack": r.attack, "defense": r.defense,
+            "momentum": r.momentum, "schedule_strength": r.schedule_strength,
+            "tournament_elo": r.tournament_elo, "components": r.components,
+        }
+    return sorted(
+        ({"team": r.team, "power": r.power, "attack": r.attack, "defense": r.defense,
+          "momentum": r.momentum, "schedule_strength": r.schedule_strength,
+          "tournament_elo": r.tournament_elo} for r in ratings.values()),
+        key=lambda x: x["power"], reverse=True,
+    )
 
 
 @app.get("/db/standings")
@@ -103,5 +130,6 @@ def predict_ml(home: str = Query(...), away: str = Query(...), neutral: bool = T
 
 
 @app.get("/simulate")
-def simulate(n: int = Query(10000, ge=100, le=100000)):
+def simulate(n: int = Query(50000, ge=1000, le=200000)):
+    """Monte Carlo tournament simulation (tournament-first power ratings)."""
     return run_simulations(n=n, seed=42)

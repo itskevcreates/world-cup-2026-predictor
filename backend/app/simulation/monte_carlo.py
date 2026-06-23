@@ -17,8 +17,12 @@ from __future__ import annotations
 import random
 from collections import defaultdict
 
-from app.core.data_2026 import GROUPS, get_strength
+from app.core.data_2026 import GROUPS
 from app.ml.poisson_model import expected_goals
+from app.ml.power_rating import power_of as _strength
+
+# the simulator now rates teams by their dynamic, tournament-first power rating
+get_strength = _strength
 
 # Canonical matchday-3 pairings for a group ordered [0,1,2,3]:
 # round 3 pits index 0 v 3 and 1 v 2 (rounds 1 and 2 already played).

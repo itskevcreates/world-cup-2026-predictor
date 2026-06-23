@@ -64,9 +64,16 @@ class MatchPrediction:
         }
 
 
-def predict_match(home: str, away: str, use_form: bool = True) -> MatchPrediction:
-    """Full probabilistic prediction for a single match (current form included)."""
-    lam_h, lam_a = expected_goals(get_strength(home, use_form), get_strength(away, use_form))
+def predict_match(home: str, away: str, use_form: bool = True, rating_fn=None) -> MatchPrediction:
+    """Full probabilistic prediction for a single match.
+
+    rating_fn: optional callable team->rating (e.g. the dynamic power rating). When
+    omitted, uses the form-adjusted Elo. Passing it unifies single-match predictions
+    with the tournament-first simulation engine.
+    """
+    sh = rating_fn(home) if rating_fn else get_strength(home, use_form)
+    sa = rating_fn(away) if rating_fn else get_strength(away, use_form)
+    lam_h, lam_a = expected_goals(sh, sa)
 
     p_home = p_draw = p_away = 0.0
     grid = []

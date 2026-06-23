@@ -69,9 +69,24 @@ cd frontend-next && npm install && npm run dev   # http://localhost:3000
 | GET | `/teams` | all 48 teams + (learned) Elo, strongest first |
 | GET | `/groups` | live group standings |
 | GET | `/db/standings` | standings read from the database |
-| GET | `/predict?home=Spain&away=Brazil&use_form=true` | Poisson prediction + scorelines (current form included) |
+| GET | `/power` | dynamic power ratings (power/attack/defense/momentum/SOS), all teams |
+| GET | `/power?team=USA` | one team's full rating breakdown + components |
+| GET | `/predict?home=Germany&away=Argentina&rating=power` | match prediction (power rating, default; `rating=elo` for the prior) |
 | GET | `/predict_ml?home=Spain&away=Brazil` | trained gradient-boosting outcome odds (feeds real form) |
-| GET | `/simulate?n=10000` | Monte Carlo title odds |
+| GET | `/simulate?n=100000` | Monte Carlo (tournament-first), round-by-round odds |
+
+## Tournament-first power rating
+The headline rating is **60% current-2026 performance** (opponent-adjusted goal
+difference, dominance, momentum vs expectation, strength of schedule) and only **40%
+prior** (form/Elo/squad/historical, with Elo just 12%). This removes the reputation
+bias: **Germany leads, Argentina is 2nd** (not a runaway favourite), and overperformers
+like **USA, Mexico, Canada** rise from low pre-tournament ranks. Full formulas, the
+Argentina-bias math, and the validation methodology are in
+[backend/docs/MODEL.md](backend/docs/MODEL.md).
+
+```bash
+python backend/pipelines/validate.py   # log loss, Brier, accuracy, calibration curve
+```
 
 ## Current form
 Predictions blend each team's **base (learned) Elo** with how they're *actually
