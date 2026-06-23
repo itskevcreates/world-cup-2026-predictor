@@ -55,11 +55,11 @@ SQUAD_TALENT = {
     # Tier 2 — very good, deep talent (kept deliberately close to each other)
     "Brazil": 2180, "England": 2185, "Netherlands": 2160, "Germany": 2120,
     # Tier 3 — strong, talented
-    "Portugal": 2185, "Japan": 2075, "Colombia": 2055, "Morocco": 2045, "Norway": 2025,
-    "Croatia": 1965, "Belgium": 1975, "Uruguay": 1965, "Switzerland": 1900,
-    "Denmark": 1905, "Senegal": 1900, "Mexico": 1820, "USA": 1815,
-    "Austria": 1820, "Serbia": 1840, "Ecuador": 1810, "Sweden": 1800,
-    "Egypt": 1800, "Nigeria": 1820,
+    "Portugal": 2215, "Japan": 2075, "Morocco": 2095, "Colombia": 1985, "Norway": 2030,
+    "Croatia": 1975, "Belgium": 1985, "Uruguay": 1970, "Switzerland": 1905,
+    "Denmark": 1910, "Senegal": 1905, "USA": 1885, "Mexico": 1810,
+    "Austria": 1820, "Serbia": 1845, "Ecuador": 1815, "Sweden": 1805,
+    "Egypt": 1805, "Nigeria": 1820,
 }
 
 # Key-player availability / injury impact. A POSITIVE value forgives current

@@ -198,7 +198,7 @@ export default function Home() {
               </tr>
             </thead>
             <tbody>
-              {powers.slice(0, 14).map((p, i) => (
+              {powers.slice(0, 16).map((p, i) => (
                 <tr key={p.team} className="border-t border-[#1d2747]">
                   <td className="py-1.5 text-muted tabular-nums">{i + 1}</td>
                   <td>{p.team}</td>
