@@ -1,0 +1,13 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt "psycopg2-binary>=2.9"
+
+COPY backend/ .
+
+RUN python build_setup.py
+
+EXPOSE 8000
+CMD sh -c "python -m app.db.load 2>/dev/null; uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
