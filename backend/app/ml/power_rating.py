@@ -50,12 +50,16 @@ WEIGHTS = {
 # Squad-talent ratings (Elo-equivalent), reflecting 2026 squad value / depth of class.
 # This is the "ceiling" of a fully-fit squad, independent of current results.
 SQUAD_TALENT = {
-    "France": 2215, "Spain": 2120, "Argentina": 2105, "Brazil": 2170, "England": 2090,
-    "Portugal": 2060, "Germany": 2000, "Netherlands": 1995, "Belgium": 1955,
-    "Uruguay": 1930, "Croatia": 1900, "Colombia": 1895, "Morocco": 1890,
-    "Norway": 1905, "Switzerland": 1875, "Japan": 1865, "Denmark": 1885,
-    "Mexico": 1805, "USA": 1800, "Senegal": 1860, "Austria": 1820, "Serbia": 1830,
-    "Ecuador": 1800, "Sweden": 1800, "Egypt": 1780, "Nigeria": 1820,
+    # Tier 1 — elite
+    "France": 2215, "Argentina": 2120, "Spain": 2130,
+    # Tier 2 — very good, deep talent (kept deliberately close to each other)
+    "Brazil": 2180, "England": 2185, "Netherlands": 2160, "Germany": 2120,
+    # Tier 3 — strong, talented
+    "Portugal": 2185, "Japan": 2075, "Colombia": 2055, "Morocco": 2045, "Norway": 2025,
+    "Croatia": 1965, "Belgium": 1975, "Uruguay": 1965, "Switzerland": 1900,
+    "Denmark": 1905, "Senegal": 1900, "Mexico": 1820, "USA": 1815,
+    "Austria": 1820, "Serbia": 1840, "Ecuador": 1810, "Sweden": 1800,
+    "Egypt": 1800, "Nigeria": 1820,
 }
 
 # Key-player availability / injury impact. A POSITIVE value forgives current
@@ -66,7 +70,7 @@ INJURY_ADJUSTMENT = {
 }
 
 MEAN_ELO = 1750.0         # league-average reference
-TOURN_SPREAD = 160.0      # Elo points per 1 std-dev of tournament z-score
+TOURN_SPREAD = 120.0      # Elo points per 1 std-dev of tournament z-score
 MOMENTUM_SPREAD = 35.0    # max Elo swing from momentum (devalued: current form is 30%)
 
 # Tournament-score sub-weights (applied to per-game, opponent-adjusted signals)
