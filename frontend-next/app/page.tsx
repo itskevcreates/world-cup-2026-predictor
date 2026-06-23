@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+// Default to the live Railway backend so production works without extra config.
+// Set NEXT_PUBLIC_API_URL to override (e.g. http://127.0.0.1:8000 for local dev).
+const API =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://world-cup-2026-predictor-production-65ad.up.railway.app";
 
 /* Semantic data hues — mirror the CSS tokens for inline-style use */
 const C = {
