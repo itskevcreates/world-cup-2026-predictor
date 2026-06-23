@@ -22,4 +22,4 @@ RUN mkdir -p data/raw && (curl -sL -o data/raw/results.csv \
     && python pipelines/train.py) || echo "training skipped (no network at build)"
 
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD sh -c "python -m app.db.load 2>/dev/null; uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
