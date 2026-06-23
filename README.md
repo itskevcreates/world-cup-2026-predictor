@@ -19,46 +19,66 @@ June 23, 2026, while the group stage is in progress).
 - **Backend / API:** Python, FastAPI
 - **Modelling & Simulation:** Poisson scoreline model, Elo ratings, Monte Carlo
 - **Frontend:** single-page dashboard (HTML/JS) calling the API
-- *(Planned: PostgreSQL persistence, scikit-learn/XGBoost trained models, Next.js UI)*
+- **Trained ML:** scikit-learn (LogisticRegression + HistGradientBoosting) on 49k real matches
+- **Database:** SQLAlchemy (PostgreSQL-ready, SQLite by default)
+- **Frontend:** Next.js 14 + TypeScript + Tailwind (`frontend-next/`), plus a zero-build
+  HTML dashboard (`frontend/index.html`)
 
 ## Project layout
 ```
 backend/
   app/
-    core/data_2026.py         # real groups, standings, team Elo ratings
-    ml/poisson_model.py       # Elo -> expected goals -> scoreline probabilities
-    simulation/monte_carlo.py # tournament simulation engine
-    main.py                   # FastAPI app (endpoints)
+    core/data_2026.py          # real groups, standings, team Elo ratings
+    ml/poisson_model.py        # Elo -> expected goals -> scoreline probabilities
+    ml/inference.py            # loads trained model + learned Elo
+    ml/artifacts/              # outcome_model.joblib, elo_ratings.json (generated)
+    simulation/monte_carlo.py  # tournament simulation engine
+    db/database.py, models.py, load.py   # SQLAlchemy persistence
+    main.py                    # FastAPI app (endpoints)
+  pipelines/train.py           # trains models on historical results
+  data/raw/results.csv         # 49k historical matches (downloaded)
   requirements.txt
-frontend/
-  index.html                  # dashboard (predictor, simulator, standings)
+frontend/index.html            # zero-build dashboard
+frontend-next/                 # Next.js + TS + Tailwind app
 ```
 
 ## Run it locally
 ```bash
-# 1. activate the virtual environment
 source .venv/bin/activate
-
-# 2. install backend deps
 pip install -r backend/requirements.txt
 
-# 3. start the API (from the backend/ folder)
-cd backend
-uvicorn app.main:app --reload
-#  -> API live at http://127.0.0.1:8000   (interactive docs at /docs)
+# (optional) train the ML models on historical data -> writes app/ml/artifacts/
+python backend/pipelines/train.py
 
-# 4. open the dashboard
-#    open frontend/index.html in your browser
+# (optional) load real teams/standings into the database
+cd backend && python -m app.db.load
+
+# start the API
+uvicorn app.main:app --reload        # http://127.0.0.1:8000  (docs at /docs)
+
+# frontend — pick one:
+open frontend/index.html             # zero-build dashboard
+# or the Next.js app:
+cd frontend-next && npm install && npm run dev   # http://localhost:3000
 ```
 
 ## API endpoints
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/` | health check |
-| GET | `/teams` | all 48 teams + Elo, strongest first |
+| GET | `/teams` | all 48 teams + (learned) Elo, strongest first |
 | GET | `/groups` | live group standings |
-| GET | `/predict?home=Spain&away=Brazil` | single-match prediction |
+| GET | `/db/standings` | standings read from the database |
+| GET | `/predict?home=Spain&away=Brazil` | Poisson match prediction + scorelines |
+| GET | `/predict_ml?home=Spain&away=Brazil` | trained gradient-boosting outcome odds |
 | GET | `/simulate?n=10000` | Monte Carlo title odds |
+
+## Model performance (time-based split, test = 2018+)
+| Model | Accuracy | Log loss |
+|-------|----------|----------|
+| Baseline (most common class) | 0.478 | – |
+| LogisticRegression | 0.600 | 0.871 |
+| HistGradientBoosting | 0.602 | 0.873 |
 
 ## Notes & honesty
 - Elo ratings are reasoned estimates, not official figures — they drive the model and

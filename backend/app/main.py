@@ -11,11 +11,16 @@ Endpoints:
     GET /predict?home=&away=      -> single match prediction
     GET /simulate?n=10000         -> Monte Carlo title odds
 """
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+
+from app.db.database import get_db
+from app.db.models import Team
 
 from app.core.data_2026 import GROUPS, ELO, all_teams, get_elo
 from app.ml.poisson_model import predict_match
+from app.ml.inference import predict_outcome_ml, has_model
 from app.simulation.monte_carlo import run_simulations
 
 app = FastAPI(title="World Cup 2026 Prediction Platform", version="0.1.0")
@@ -55,6 +60,31 @@ def predict(home: str = Query(...), away: str = Query(...)):
     if home not in ELO or away not in ELO:
         raise HTTPException(404, "Unknown team. Check /teams for valid names.")
     return predict_match(home, away).as_dict()
+
+
+@app.get("/db/standings")
+def db_standings(db: Session = Depends(get_db)):
+    """Standings read from the database (proves the persistence layer works)."""
+    teams = db.query(Team).all()
+    if not teams:
+        raise HTTPException(503, "Database empty. Run: python -m app.db.load")
+    return sorted(
+        ({"team": t.name, "group": t.group, "elo": round(t.elo, 1),
+          "points": t.standing.points, "goal_diff": t.standing.goal_diff}
+         for t in teams),
+        key=lambda x: (x["group"], -x["points"], -x["goal_diff"]),
+    )
+
+
+@app.get("/predict_ml")
+def predict_ml(home: str = Query(...), away: str = Query(...), neutral: bool = True):
+    """Outcome probabilities from the trained gradient-boosting model."""
+    if home not in ELO or away not in ELO:
+        raise HTTPException(404, "Unknown team. Check /teams for valid names.")
+    if not has_model():
+        raise HTTPException(503, "Trained model not found. Run pipelines/train.py first.")
+    probs = predict_outcome_ml(get_elo(home), get_elo(away), neutral=neutral)
+    return {"home": home, "away": away, "model": "HistGradientBoosting", "probabilities": probs}
 
 
 @app.get("/simulate")

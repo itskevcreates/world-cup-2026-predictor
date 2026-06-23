@@ -60,7 +60,15 @@ GROUPS = {
 DEFAULT_ELO = 1700  # fallback for any team missing from ELO
 
 
-def get_elo(team: str) -> int:
+def get_elo(team: str) -> float:
+    """Prefer data-learned Elo (from the training pipeline); fall back to estimates."""
+    try:
+        from app.ml.inference import learned_elo
+        learned = learned_elo()
+        if team in learned:
+            return learned[team]
+    except Exception:
+        pass
     return ELO.get(team, DEFAULT_ELO)
 
 
