@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>World Cup 2026 — Prediction Platform</title>
+<style>
+  :root { --bg:#0b1020; --card:#151c33; --accent:#22d3a6; --text:#e6ecff; --muted:#8aa0c8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:linear-gradient(160deg,#0b1020,#111a3a); color:var(--text); }
+  header { padding:28px 20px; text-align:center; }
+  h1 { margin:0; font-size:1.9rem; }
+  .sub { color:var(--muted); margin-top:6px; }
+  .wrap { max-width:1100px; margin:0 auto; padding:0 16px 60px; }
+  .grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); }
+  .card { background:var(--card); border:1px solid #243056; border-radius:14px; padding:18px; }
+  .card h2 { margin:0 0 12px; font-size:1.05rem; }
+  select,button,input { font:inherit; padding:9px 11px; border-radius:9px;
+         border:1px solid #2c3a66; background:#0e1530; color:var(--text); }
+  button { background:var(--accent); color:#04231a; font-weight:700; cursor:pointer; border:none; }
+  button:hover { filter:brightness(1.08); }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  table { width:100%; border-collapse:collapse; font-size:.9rem; }
+  th,td { text-align:left; padding:5px 6px; border-bottom:1px solid #223; }
+  th { color:var(--muted); font-weight:600; }
+  .bar { height:10px; border-radius:6px; background:#0e1530; overflow:hidden; margin-top:4px; }
+  .bar > span { display:block; height:100%; background:var(--accent); }
+  .pct { font-variant-numeric:tabular-nums; }
+  .muted { color:var(--muted); font-size:.85rem; }
+  .pill { display:inline-block; background:#0e1530; border:1px solid #2c3a66;
+          border-radius:999px; padding:2px 9px; font-size:.8rem; color:var(--muted); }
+  .groupcol h3 { margin:14px 0 4px; font-size:.85rem; color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚽ World Cup 2026 — Prediction Platform</h1>
+  <div class="sub">USA · Mexico · Canada · live data + Monte Carlo simulation</div>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+    <!-- Match predictor -->
+    <div class="card">
+      <h2>Match Predictor</h2>
+      <div class="row">
+        <select id="home"></select>
+        <span class="muted">vs</span>
+        <select id="away"></select>
+        <button onclick="predict()">Predict</button>
+      </div>
+      <div id="predOut" style="margin-top:14px;"></div>
+    </div>
+
+    <!-- Simulation -->
+    <div class="card">
+      <h2>Tournament Simulation</h2>
+      <div class="row">
+        <label class="muted">Runs</label>
+        <input id="nsim" type="number" value="10000" min="100" max="100000" style="width:120px" />
+        <button onclick="simulate()">Run Monte Carlo</button>
+      </div>
+      <div id="simOut" class="muted" style="margin-top:12px;">Run the simulation to see title odds.</div>
+    </div>
+  </div>
+
+  <!-- Standings -->
+  <div class="card" style="margin-top:16px;">
+    <h2>Live Group Standings <span class="pill">as of June 23, 2026</span></h2>
+    <div id="groups" class="grid"></div>
+  </div>
+</div>
+
+<script>
+const API = "http://127.0.0.1:8000";
+
+async function loadTeams() {
+  const teams = await (await fetch(API + "/teams")).json();
+  const h = document.getElementById("home"), a = document.getElementById("away");
+  teams.forEach(t => {
+    h.add(new Option(t.team, t.team));
+    a.add(new Option(t.team, t.team));
+  });
+  h.value = "Spain"; a.value = "Brazil";
+}
+
+async function predict() {
+  const home = home_el().value, away = away_el().value;
+  const out = document.getElementById("predOut");
+  out.innerHTML = "<span class='muted'>Predicting…</span>";
+  const d = await (await fetch(`${API}/predict?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`)).json();
+  const p = d.probabilities;
+  out.innerHTML = `
+    <div class="row" style="justify-content:space-between">
+      <b>${d.home}</b><span class="muted">xG ${d.expected_goals.home} – ${d.expected_goals.away}</span><b>${d.away}</b>
+    </div>
+    ${barRow(d.home + " win", p.home_win)}
+    ${barRow("Draw", p.draw)}
+    ${barRow(d.away + " win", p.away_win)}
+    <div class="muted" style="margin-top:8px">Likely scores: ${d.most_likely_scorelines.map(s=>s.score).join(" · ")}</div>`;
+}
+
+function barRow(label, prob) {
+  const pct = (prob*100).toFixed(1);
+  return `<div style="margin-top:8px"><div class="row" style="justify-content:space-between">
+    <span>${label}</span><span class="pct">${pct}%</span></div>
+    <div class="bar"><span style="width:${pct}%"></span></div></div>`;
+}
+
+async function simulate() {
+  const n = document.getElementById("nsim").value;
+  const out = document.getElementById("simOut");
+  out.innerHTML = "Running " + Number(n).toLocaleString() + " simulations…";
+  const d = await (await fetch(`${API}/simulate?n=${n}`)).json();
+  const rows = d.title_odds.slice(0,12).map(r =>
+    `<tr><td>${r.team}</td><td style="width:55%"><div class="bar"><span style="width:${Math.min(100,r.title_pct*3)}%"></span></div></td>
+     <td class="pct">${r.title_pct}%</td></tr>`).join("");
+  out.innerHTML = `<table><thead><tr><th>Team</th><th>Title chance</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+async function loadGroups() {
+  const g = await (await fetch(API + "/groups")).json();
+  const box = document.getElementById("groups");
+  box.innerHTML = Object.entries(g).map(([name, rows]) => `
+    <div class="groupcol"><h3>Group ${name}</h3>
+      <table><tbody>${rows.map(r =>
+        `<tr><td>${r.team}</td><td class="pct">${r.points} pts</td><td class="muted">${r.goal_diff>0?'+':''}${r.goal_diff}</td></tr>`
+      ).join("")}</tbody></table></div>`).join("");
+}
+
+const home_el = () => document.getElementById("home");
+const away_el = () => document.getElementById("away");
+
+loadTeams(); loadGroups();
+</script>
+</body>
+</html>
