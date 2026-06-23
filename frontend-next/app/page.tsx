@@ -4,45 +4,49 @@ import { useEffect, useState } from "react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-type TeamElo = { team: string; elo: number };
+type TeamElo = { team: string };
 type Prediction = {
-  home: string;
-  away: string;
+  home: string; away: string;
   expected_goals: { home: number; away: number };
   probabilities: { home_win: number; draw: number; away_win: number };
   most_likely_scorelines: { score: string; prob: number }[];
 };
 type Power = {
   team: string; power: number; attack: number; defense: number;
-  momentum: number; schedule_strength: number; tournament_elo: number;
+  momentum: number; schedule_strength: number;
 };
 type Outlook = {
-  team: string;
-  advance_pct: number;
-  quarter_pct: number;
-  semi_pct: number;
-  final_pct: number;
-  title_pct: number;
+  team: string; advance_pct: number; quarter_pct: number;
+  semi_pct: number; final_pct: number; title_pct: number;
 };
 
-function tier(pct: number) {
-  if (pct >= 10) return { label: "Favorite", color: "#22d3a6" };
-  if (pct >= 3) return { label: "Contender", color: "#5b9dff" };
-  if (pct > 0) return { label: "Dark horse", color: "#c084fc" };
+function tier(p: number) {
+  if (p >= 10) return { label: "Favorite", color: "#22d3a6" };
+  if (p >= 4) return { label: "Contender", color: "#5b9dff" };
+  if (p > 0) return { label: "Dark horse", color: "#c084fc" };
   return { label: "Outsider", color: "#64748b" };
 }
 
-function Bar({ pct, label }: { pct: number; label: string }) {
+function Bar({ pct, color = "#22d3a6" }: { pct: number; color?: string }) {
   return (
-    <div className="mt-2">
-      <div className="flex justify-between text-sm">
-        <span>{label}</span>
-        <span className="tabular-nums">{pct.toFixed(1)}%</span>
-      </div>
-      <div className="h-2 rounded bg-[#0e1530] overflow-hidden mt-1">
-        <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
-      </div>
+    <div className="track h-1.5">
+      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
     </div>
+  );
+}
+
+function Card({ title, eyebrow, children, right }: any) {
+  return (
+    <section className="card p-5">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          {eyebrow && <div className="eyebrow mb-1">{eyebrow}</div>}
+          <h2 className="text-[15px] font-semibold">{title}</h2>
+        </div>
+        {right}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -55,7 +59,6 @@ export default function Home() {
   const [powers, setPowers] = useState<Power[]>([]);
   const [loadingSim, setLoadingSim] = useState(false);
 
-  // parlay builder — match vs match
   type Leg = { home: string; away: string; pick: "home" | "draw" | "away" };
   const [legs, setLegs] = useState<Leg[]>([
     { home: "Colombia", away: "DR Congo", pick: "home" },
@@ -63,26 +66,6 @@ export default function Home() {
   ]);
   const [parlay, setParlay] = useState<any>(null);
   const [loadingParlay, setLoadingParlay] = useState(false);
-
-  function setLeg(i: number, field: keyof Leg, val: string) {
-    setLegs((ls) => ls.map((l, j) => (j === i ? { ...l, [field]: val } : l)));
-  }
-  function addLeg() {
-    setLegs((ls) => [...ls, { home: teams[0]?.team || "Spain", away: teams[1]?.team || "Brazil", pick: "home" }]);
-  }
-  function removeLeg(i: number) {
-    setLegs((ls) => ls.filter((_, j) => j !== i));
-  }
-  async function calcParlay() {
-    setLoadingParlay(true);
-    const r = await fetch(`${API}/parlay/matches`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ legs }),
-    });
-    setParlay(await r.json());
-    setLoadingParlay(false);
-  }
 
   useEffect(() => {
     fetch(`${API}/teams`).then((r) => r.json()).then(setTeams).catch(() => {});
@@ -93,238 +76,242 @@ export default function Home() {
     const r = await fetch(`${API}/predict?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`);
     setPred(await r.json());
   }
-
   async function simulate() {
     setLoadingSim(true);
-    const r = await fetch(`${API}/simulate?n=10000`);
-    const d = await r.json();
-    setOutlook((d.outlook as Outlook[]).filter((t) => t.title_pct > 0).slice(0, 20));
+    const d = await (await fetch(`${API}/simulate?n=50000`)).json();
+    setOutlook((d.outlook as Outlook[]).filter((t) => t.title_pct > 0).slice(0, 16));
     setLoadingSim(false);
   }
+  function setLeg(i: number, f: keyof Leg, v: string) {
+    setLegs((ls) => ls.map((l, j) => (j === i ? { ...l, [f]: v } : l)));
+  }
+  function addLeg() {
+    setLegs((ls) => [...ls, { home: teams[0]?.team || "Spain", away: teams[1]?.team || "Brazil", pick: "home" }]);
+  }
+  function removeLeg(i: number) { setLegs((ls) => ls.filter((_, j) => j !== i)); }
+  async function calcParlay() {
+    setLoadingParlay(true);
+    const r = await fetch(`${API}/parlay/matches`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ legs }),
+    });
+    setParlay(await r.json());
+    setLoadingParlay(false);
+  }
+
+  const sel = "min-w-0";
 
   return (
-    <main className="max-w-5xl mx-auto px-4 pb-16">
-      <header className="text-center py-7">
-        <h1 className="text-3xl font-bold">⚽ World Cup 2026 — Prediction Platform</h1>
-        <p className="text-muted mt-1">USA · Mexico · Canada — trained ML model + Monte Carlo simulation</p>
+    <main className="max-w-5xl mx-auto px-4 sm:px-6 pb-20">
+      {/* Header */}
+      <header className="py-10 text-center">
+        <div className="eyebrow mb-2">USA · Mexico · Canada · June 2026</div>
+        <h1 className="text-[28px] sm:text-4xl font-bold tracking-tight">
+          World Cup 2026 <span className="text-[#22d3a6]">Prediction Platform</span>
+        </h1>
+        <p className="text-[#8093b8] mt-2 text-sm">
+          Tournament-first power ratings · Monte Carlo simulation · trained on 49k matches
+        </p>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         {/* Match predictor */}
-        <section className="bg-card border border-[#243056] rounded-2xl p-5">
-          <h2 className="font-semibold mb-3">Match Predictor</h2>
-          <div className="flex flex-wrap gap-2 items-center">
-            <select className="bg-[#0e1530] border border-[#2c3a66] rounded-lg px-3 py-2"
-              value={home} onChange={(e) => setHome(e.target.value)}>
-              {teams.map((t) => <option key={t.team} value={t.team}>{t.team}</option>)}
+        <Card eyebrow="Single match" title="Match Predictor">
+          <div className="grid grid-cols-[1fr_auto_1fr_auto] gap-2 items-center">
+            <select className={sel} value={home} onChange={(e) => setHome(e.target.value)}>
+              {teams.map((t) => <option key={t.team}>{t.team}</option>)}
             </select>
-            <span className="text-muted">vs</span>
-            <select className="bg-[#0e1530] border border-[#2c3a66] rounded-lg px-3 py-2"
-              value={away} onChange={(e) => setAway(e.target.value)}>
-              {teams.map((t) => <option key={t.team} value={t.team}>{t.team}</option>)}
+            <span className="text-[#6b7da3] text-xs px-1">vs</span>
+            <select className={sel} value={away} onChange={(e) => setAway(e.target.value)}>
+              {teams.map((t) => <option key={t.team}>{t.team}</option>)}
             </select>
-            <button onClick={predict}
-              className="bg-accent text-[#04231a] font-bold rounded-lg px-4 py-2">Predict</button>
+            <button className="btn-primary" onClick={predict}>Predict</button>
           </div>
           {pred && (
-            <div className="mt-4">
-              <div className="flex justify-between">
+            <div className="mt-5 space-y-3">
+              <div className="flex items-center justify-between text-sm">
                 <b>{pred.home}</b>
-                <span className="text-muted text-sm">
+                <span className="text-[#8093b8] text-xs">
                   xG {pred.expected_goals.home} – {pred.expected_goals.away}
                 </span>
                 <b>{pred.away}</b>
               </div>
-              <Bar label={`${pred.home} win`} pct={pred.probabilities.home_win * 100} />
-              <Bar label="Draw" pct={pred.probabilities.draw * 100} />
-              <Bar label={`${pred.away} win`} pct={pred.probabilities.away_win * 100} />
-              <p className="text-muted text-sm mt-2">
-                Likely scores: {pred.most_likely_scorelines.map((s) => s.score).join(" · ")}
-              </p>
+              {[
+                { l: `${pred.home} win`, v: pred.probabilities.home_win, c: "#22d3a6" },
+                { l: "Draw", v: pred.probabilities.draw, c: "#5b9dff" },
+                { l: `${pred.away} win`, v: pred.probabilities.away_win, c: "#c084fc" },
+              ].map((r) => (
+                <div key={r.l}>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>{r.l}</span><span className="tabular-nums">{(r.v * 100).toFixed(1)}%</span>
+                  </div>
+                  <Bar pct={r.v * 100} color={r.c} />
+                </div>
+              ))}
+              <div className="text-[#8093b8] text-xs pt-1">
+                Likely scores · {pred.most_likely_scorelines.map((s) => s.score).join("  ")}
+              </div>
             </div>
           )}
-        </section>
+        </Card>
 
-        {/* Simulation */}
-        <section className="bg-card border border-[#243056] rounded-2xl p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold">Title Outlook</h2>
-            {outlook.length > 0 && (
-              <span className="text-muted text-xs">10,000 simulations</span>
-            )}
-          </div>
-          <button onClick={simulate} disabled={loadingSim}
-            className="bg-accent text-[#04231a] font-bold rounded-lg px-4 py-2 disabled:opacity-60">
-            {loadingSim ? "Running 10,000 sims…" : "Run Monte Carlo"}
-          </button>
-
-          {outlook.length > 0 && (
-            <>
-              <div className="flex gap-3 text-xs mt-4 mb-2">
-                <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-full" style={{ background: "#22d3a6" }} />Favorite</span>
-                <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-full" style={{ background: "#5b9dff" }} />Contender</span>
-                <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-full" style={{ background: "#c084fc" }} />Dark horse</span>
-              </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-muted text-left text-xs">
-                    <th className="py-1 font-medium">Team</th>
-                    <th className="font-medium text-right">SF</th>
-                    <th className="font-medium text-right">Final</th>
-                    <th className="font-medium pl-3">Win</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {outlook.map((o, i) => {
-                    const t = tier(o.title_pct);
-                    const max = outlook[0].title_pct;
-                    return (
-                      <tr key={o.team} className="border-t border-[#1d2747]">
-                        <td className="py-1.5">
-                          <span className="text-muted mr-2 tabular-nums">{i + 1}</span>
-                          {o.team}
-                          <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full"
-                            style={{ background: `${t.color}22`, color: t.color }}>{t.label}</span>
-                        </td>
-                        <td className="text-right tabular-nums text-muted">{o.semi_pct}%</td>
-                        <td className="text-right tabular-nums text-muted">{o.final_pct}%</td>
-                        <td className="pl-3">
-                          <div className="flex items-center gap-2">
-                            <div className="h-2 rounded bg-[#0e1530] overflow-hidden flex-1 min-w-[60px]">
-                              <div className="h-full rounded" style={{ width: `${(o.title_pct / max) * 100}%`, background: t.color }} />
-                            </div>
-                            <span className="tabular-nums w-12 text-right font-medium">{o.title_pct}%</span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </>
+        {/* Title outlook */}
+        <Card eyebrow="50,000 simulations" title="Title Outlook"
+          right={<button className="btn-primary" onClick={simulate} disabled={loadingSim}>
+            {loadingSim ? "Simulating…" : "Run"}
+          </button>}>
+          {outlook.length === 0 ? (
+            <p className="text-[#8093b8] text-sm">Run the Monte Carlo to see championship odds.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="eyebrow text-left">
+                  <th className="pb-2 font-semibold">Team</th>
+                  <th className="pb-2 font-semibold text-right">SF</th>
+                  <th className="pb-2 font-semibold text-right pr-3">Final</th>
+                  <th className="pb-2 font-semibold">Win</th>
+                </tr>
+              </thead>
+              <tbody>
+                {outlook.map((o, i) => {
+                  const t = tier(o.title_pct); const max = outlook[0].title_pct;
+                  return (
+                    <tr key={o.team} className="row-div">
+                      <td className="py-1.5">
+                        <span className="text-[#6b7da3] mr-2 tabular-nums text-xs">{i + 1}</span>{o.team}
+                        <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full"
+                          style={{ background: `${t.color}1e`, color: t.color }}>{t.label}</span>
+                      </td>
+                      <td className="text-right tabular-nums text-[#8093b8]">{o.semi_pct}%</td>
+                      <td className="text-right tabular-nums text-[#8093b8] pr-3">{o.final_pct}%</td>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 min-w-[50px]"><Bar pct={(o.title_pct / max) * 100} color={t.color} /></div>
+                          <span className="tabular-nums w-12 text-right font-medium">{o.title_pct}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           )}
-        </section>
+        </Card>
       </div>
 
-      {/* Parlay builder — match vs match */}
-      <section className="bg-card border border-[#243056] rounded-2xl p-5 mt-4">
-        <h2 className="font-semibold mb-1">Parlay Simulator</h2>
-        <p className="text-muted text-xs mb-3">
-          Build a betting slip of head-to-head picks. Each match's probability comes from
-          the power-rating model; matches are independent, so the parlay is their product.
-        </p>
+      {/* Parlay */}
+      <div className="mt-4">
+        <Card eyebrow="Betting slip" title="Parlay Simulator">
+          <p className="text-[#8093b8] text-xs -mt-2 mb-4">
+            Head-to-head picks priced by the power-rating model. Matches are independent —
+            the parlay is the product of each leg.
+          </p>
+          <div className="space-y-2">
+            {legs.map((leg, i) => {
+              const lr = parlay?.legs?.[i];
+              return (
+                <div key={i} className="grid grid-cols-[1fr_auto_1fr_auto_auto_auto] gap-2 items-center">
+                  <select value={leg.home} onChange={(e) => setLeg(i, "home", e.target.value)}>
+                    {teams.map((t) => <option key={t.team}>{t.team}</option>)}
+                  </select>
+                  <span className="text-[#6b7da3] text-xs">vs</span>
+                  <select value={leg.away} onChange={(e) => setLeg(i, "away", e.target.value)}>
+                    {teams.map((t) => <option key={t.team}>{t.team}</option>)}
+                  </select>
+                  <select value={leg.pick} onChange={(e) => setLeg(i, "pick", e.target.value)}>
+                    <option value="home">{leg.home}</option>
+                    <option value="draw">Draw</option>
+                    <option value="away">{leg.away}</option>
+                  </select>
+                  <span className="text-[#22d3a6] text-sm tabular-nums w-12 text-right">
+                    {lr ? `${(lr.probability * 100).toFixed(0)}%` : ""}
+                  </span>
+                  <button onClick={() => removeLeg(i)} aria-label="remove"
+                    className="text-[#6b7da3] hover:text-red-400 px-1 text-lg leading-none">×</button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex gap-2 mt-4">
+            <button className="btn-ghost text-sm" onClick={addLeg}>+ Add match</button>
+            <button className="btn-primary" onClick={calcParlay} disabled={loadingParlay || legs.length === 0}>
+              {loadingParlay ? "Calculating…" : "Calculate Parlay"}
+            </button>
+          </div>
 
-        <div className="space-y-2">
-          {legs.map((leg, i) => {
-            const lr = parlay?.legs?.[i];
-            return (
-              <div key={i} className="flex flex-wrap gap-2 items-center">
-                <select className="bg-[#0e1530] border border-[#2c3a66] rounded-lg px-2 py-2"
-                  value={leg.home} onChange={(e) => setLeg(i, "home", e.target.value)}>
-                  {teams.map((t) => <option key={t.team} value={t.team}>{t.team}</option>)}
-                </select>
-                <span className="text-muted text-xs">vs</span>
-                <select className="bg-[#0e1530] border border-[#2c3a66] rounded-lg px-2 py-2"
-                  value={leg.away} onChange={(e) => setLeg(i, "away", e.target.value)}>
-                  {teams.map((t) => <option key={t.team} value={t.team}>{t.team}</option>)}
-                </select>
-                <select className="bg-[#0e1530] border border-[#2c3a66] rounded-lg px-2 py-2"
-                  value={leg.pick} onChange={(e) => setLeg(i, "pick", e.target.value)}>
-                  <option value="home">{leg.home} win</option>
-                  <option value="draw">Draw</option>
-                  <option value="away">{leg.away} win</option>
-                </select>
-                {lr && <span className="text-accent text-sm tabular-nums">{(lr.probability * 100).toFixed(0)}%</span>}
-                <button onClick={() => removeLeg(i)} aria-label="remove"
-                  className="text-muted hover:text-red-400 px-1 text-lg leading-none">×</button>
+          {parlay && (
+            <div className="mt-5 pt-4 row-div">
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <div className="eyebrow mb-1">All picks correct</div>
+                  <div className="text-4xl font-bold text-[#22d3a6] tabular-nums leading-none">
+                    {(parlay.parlay_probability * 100).toFixed(1)}%
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="eyebrow mb-1">Fair odds</div>
+                  <div className="tabular-nums text-lg">
+                    {parlay.fair_decimal_odds}×
+                    <span className="text-[#8093b8] text-sm ml-1">
+                      ({parlay.fair_american_odds > 0 ? "+" : ""}{parlay.fair_american_odds})
+                    </span>
+                  </div>
+                </div>
               </div>
-            );
-          })}
-        </div>
+              <table className="w-full text-sm mt-4">
+                <tbody>
+                  {parlay.legs.map((l: any, i: number) => (
+                    <tr key={i} className="row-div">
+                      <td className="py-1.5">{l.match}</td>
+                      <td className="text-[#8093b8]">{l.pick}</td>
+                      <td className="text-right tabular-nums">{(l.probability * 100).toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </div>
 
-        <div className="flex gap-2 mt-3">
-          <button onClick={addLeg}
-            className="border border-[#2c3a66] text-muted rounded-lg px-3 py-2 text-sm">+ Add match</button>
-          <button onClick={calcParlay} disabled={loadingParlay || legs.length === 0}
-            className="bg-accent text-[#04231a] font-bold rounded-lg px-4 py-2 disabled:opacity-60">
-            {loadingParlay ? "Calculating…" : "Calculate Parlay"}
-          </button>
-        </div>
-
-        {parlay && (
-          <div className="mt-4 border-t border-[#1d2747] pt-4">
-            <table className="w-full text-sm mb-3">
+      {/* Power ratings */}
+      {powers.length > 0 && (
+        <div className="mt-4">
+          <Card eyebrow="Tournament-first · 30% current form, 70% talent & prior" title="Dynamic Power Ratings">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="eyebrow text-left">
+                  <th className="pb-2 font-semibold">#</th>
+                  <th className="pb-2 font-semibold">Team</th>
+                  <th className="pb-2 font-semibold text-right">Power</th>
+                  <th className="pb-2 font-semibold text-right">Atk</th>
+                  <th className="pb-2 font-semibold text-right">Def</th>
+                  <th className="pb-2 font-semibold text-right">Mom</th>
+                  <th className="pb-2 font-semibold text-right">SOS</th>
+                </tr>
+              </thead>
               <tbody>
-                {parlay.legs.map((l: any, i: number) => (
-                  <tr key={i} className="border-b border-[#1d2747]">
-                    <td className="py-1.5">{l.match}</td>
-                    <td className="text-muted">{l.pick}</td>
-                    <td className="text-right tabular-nums">{(l.probability * 100).toFixed(1)}%</td>
+                {powers.slice(0, 16).map((p, i) => (
+                  <tr key={p.team} className="row-div">
+                    <td className="py-1.5 text-[#6b7da3] tabular-nums text-xs">{i + 1}</td>
+                    <td>{p.team}</td>
+                    <td className="text-right tabular-nums font-medium">{p.power.toFixed(0)}</td>
+                    <td className="text-right tabular-nums text-[#8093b8]">{p.attack.toFixed(0)}</td>
+                    <td className="text-right tabular-nums text-[#8093b8]">{p.defense.toFixed(0)}</td>
+                    <td className="text-right tabular-nums" style={{ color: p.momentum >= 0 ? "#22d3a6" : "#f87171" }}>
+                      {p.momentum >= 0 ? "+" : ""}{p.momentum.toFixed(0)}
+                    </td>
+                    <td className="text-right tabular-nums text-[#8093b8]">{p.schedule_strength.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="flex items-end justify-between">
-              <div>
-                <div className="text-muted text-xs">Parlay hits (all picks correct)</div>
-                <div className="text-3xl font-bold text-accent tabular-nums">
-                  {(parlay.parlay_probability * 100).toFixed(2)}%
-                </div>
-              </div>
-              <div className="text-right text-sm">
-                <div className="text-muted text-xs">Fair odds</div>
-                <div className="tabular-nums">{parlay.fair_decimal_odds}× &nbsp;
-                  <span className="text-muted">
-                    ({parlay.fair_american_odds > 0 ? "+" : ""}{parlay.fair_american_odds})
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* Dynamic power ratings */}
-      {powers.length > 0 && (
-        <section className="bg-card border border-[#243056] rounded-2xl p-5 mt-4">
-          <h2 className="font-semibold mb-1">Dynamic Power Ratings</h2>
-          <p className="text-muted text-xs mb-3">
-            Tournament-first: 60% current 2026 performance (opponent-adjusted, dominance,
-            momentum), 40% prior. Reputation no longer decides the order.
-          </p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-muted text-left text-xs">
-                <th className="py-1 font-medium">#</th>
-                <th className="font-medium">Team</th>
-                <th className="font-medium text-right">Power</th>
-                <th className="font-medium text-right">Atk</th>
-                <th className="font-medium text-right">Def</th>
-                <th className="font-medium text-right">Mom.</th>
-                <th className="font-medium text-right">SOS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {powers.slice(0, 16).map((p, i) => (
-                <tr key={p.team} className="border-t border-[#1d2747]">
-                  <td className="py-1.5 text-muted tabular-nums">{i + 1}</td>
-                  <td>{p.team}</td>
-                  <td className="text-right tabular-nums font-medium">{p.power.toFixed(0)}</td>
-                  <td className="text-right tabular-nums text-muted">{p.attack.toFixed(0)}</td>
-                  <td className="text-right tabular-nums text-muted">{p.defense.toFixed(0)}</td>
-                  <td className="text-right tabular-nums" style={{ color: p.momentum >= 0 ? "#22d3a6" : "#f87171" }}>
-                    {p.momentum >= 0 ? "+" : ""}{p.momentum.toFixed(0)}
-                  </td>
-                  <td className="text-right tabular-nums text-muted">{p.schedule_strength.toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+          </Card>
+        </div>
       )}
 
-      <p className="text-muted text-xs mt-6 text-center">
-        Data as of June 23, 2026 · power ratings from live 2026 results · API: {API}
+      <p className="text-[#6b7da3] text-xs mt-8 text-center">
+        Data as of June 23, 2026 · power ratings from live 2026 results
       </p>
     </main>
   );

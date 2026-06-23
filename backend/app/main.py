@@ -153,6 +153,7 @@ def parlay_matches(req: MatchParlayRequest):
     matches are independent events, so the parlay probability is the product of each
     leg's win probability from the power-rating model.
     """
+    import math
     key = {"home": "home_win", "draw": "draw", "away": "away_win"}
     legs_out, combined = [], 1.0
     for leg in req.legs:
@@ -161,7 +162,17 @@ def parlay_matches(req: MatchParlayRequest):
         if leg.pick not in key:
             raise HTTPException(422, "pick must be home | draw | away")
         pred = predict_match(leg.home, leg.away, rating_fn=power_of).as_dict()
-        prob = pred["probabilities"][key[leg.pick]]
+        model_prob = pred["probabilities"][key[leg.pick]]
+        # favouredness from the power-rating gap (Elo win expectancy), then average
+        # it with the model probability so clear favourites aren't under-priced.
+        ph, pa = power_of(leg.home), power_of(leg.away)
+        exp_home = 1.0 / (1.0 + 10 ** ((pa - ph) / 400.0))
+        if leg.pick == "home":
+            prob = (model_prob + exp_home) / 2
+        elif leg.pick == "away":
+            prob = (model_prob + (1 - exp_home)) / 2
+        else:  # draw — favouredness doesn't apply; keep the model value
+            prob = model_prob
         combined *= prob
         winner = leg.home if leg.pick == "home" else (leg.away if leg.pick == "away" else "Draw")
         legs_out.append({
