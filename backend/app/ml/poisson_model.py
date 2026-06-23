@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-from app.core.data_2026 import get_elo
+from app.core.data_2026 import get_strength
 
 # --- model constants (tuned to realistic international scoring) ---------------
 BASE_GOALS = 1.35     # avg goals a balanced team scores in a WC match
@@ -62,9 +62,9 @@ class MatchPrediction:
         }
 
 
-def predict_match(home: str, away: str) -> MatchPrediction:
-    """Full probabilistic prediction for a single match."""
-    lam_h, lam_a = expected_goals(get_elo(home), get_elo(away))
+def predict_match(home: str, away: str, use_form: bool = True) -> MatchPrediction:
+    """Full probabilistic prediction for a single match (current form included)."""
+    lam_h, lam_a = expected_goals(get_strength(home, use_form), get_strength(away, use_form))
 
     p_home = p_draw = p_away = 0.0
     grid = []

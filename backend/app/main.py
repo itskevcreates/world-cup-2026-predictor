@@ -18,9 +18,12 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.models import Team
 
-from app.core.data_2026 import GROUPS, ELO, all_teams, get_elo
+from app.core.data_2026 import (
+    GROUPS, ELO, all_teams, get_elo, get_strength,
+    form_gd_per_game, form_elo_adjustment,
+)
 from app.ml.poisson_model import predict_match
-from app.ml.inference import predict_outcome_ml, has_model
+from app.ml.inference import predict_outcome_ml, has_model, model_name
 from app.simulation.monte_carlo import run_simulations
 
 app = FastAPI(title="World Cup 2026 Prediction Platform", version="0.1.0")
@@ -39,8 +42,13 @@ def health():
 @app.get("/teams")
 def teams():
     return sorted(
-        ({"team": t, "elo": get_elo(t)} for t in all_teams()),
-        key=lambda x: x["elo"], reverse=True,
+        ({
+            "team": t,
+            "elo": round(get_elo(t), 1),
+            "form_adj": round(form_elo_adjustment(t), 1),
+            "strength": round(get_strength(t), 1),
+        } for t in all_teams()),
+        key=lambda x: x["strength"], reverse=True,
     )
 
 
@@ -56,10 +64,10 @@ def groups():
 
 
 @app.get("/predict")
-def predict(home: str = Query(...), away: str = Query(...)):
+def predict(home: str = Query(...), away: str = Query(...), use_form: bool = True):
     if home not in ELO or away not in ELO:
         raise HTTPException(404, "Unknown team. Check /teams for valid names.")
-    return predict_match(home, away).as_dict()
+    return predict_match(home, away, use_form=use_form).as_dict()
 
 
 @app.get("/db/standings")
@@ -83,8 +91,15 @@ def predict_ml(home: str = Query(...), away: str = Query(...), neutral: bool = T
         raise HTTPException(404, "Unknown team. Check /teams for valid names.")
     if not has_model():
         raise HTTPException(503, "Trained model not found. Run pipelines/train.py first.")
-    probs = predict_outcome_ml(get_elo(home), get_elo(away), neutral=neutral)
-    return {"home": home, "away": away, "model": "HistGradientBoosting", "probabilities": probs}
+    probs = predict_outcome_ml(
+        get_elo(home), get_elo(away), neutral=neutral,
+        home_form=form_gd_per_game(home), away_form=form_gd_per_game(away),
+    )
+    return {
+        "home": home, "away": away, "model": model_name(),
+        "form": {home: round(form_gd_per_game(home), 2), away: round(form_gd_per_game(away), 2)},
+        "probabilities": probs,
+    }
 
 
 @app.get("/simulate")

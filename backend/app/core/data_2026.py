@@ -72,5 +72,46 @@ def get_elo(team: str) -> float:
     return ELO.get(team, DEFAULT_ELO)
 
 
+# ---------------------------------------------------------------------------
+# Current-tournament FORM (how each team is actually playing right now, 2026).
+# Derived from the live standings above: points/game and goal-diff/game.
+# ---------------------------------------------------------------------------
+FORM = {
+    name: {"points": pts, "gd": gd, "played": pl}
+    for rows in GROUPS.values()
+    for (name, pts, gd, pl) in rows
+}
+
+# how strongly current form bends a team's rating / expected goals
+FORM_GD_WEIGHT = 10.0      # Elo points per goal of GD-per-game
+FORM_PTS_WEIGHT = 15.0     # Elo points per point-per-game above "par" (1.0 ppg)
+FORM_CAP = 55.0            # never let form swing a rating more than this
+
+
+def form_gd_per_game(team: str) -> float:
+    """Average goal difference per match so far in the 2026 tournament."""
+    f = FORM.get(team)
+    if not f or f["played"] == 0:
+        return 0.0
+    return f["gd"] / f["played"]
+
+
+def form_elo_adjustment(team: str) -> float:
+    """Elo nudge from current form: hot teams get a boost, cold teams a penalty."""
+    f = FORM.get(team)
+    if not f or f["played"] == 0:
+        return 0.0
+    ppg = f["points"] / f["played"]
+    gpg = f["gd"] / f["played"]
+    adj = (ppg - 1.0) * FORM_PTS_WEIGHT + gpg * FORM_GD_WEIGHT
+    return max(-FORM_CAP, min(FORM_CAP, adj))
+
+
+def get_strength(team: str, use_form: bool = True) -> float:
+    """Team rating used by the model: base (learned) Elo + current-form nudge."""
+    base = get_elo(team)
+    return base + form_elo_adjustment(team) if use_form else base
+
+
 def all_teams():
     return [t[0] for g in GROUPS.values() for t in g]

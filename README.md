@@ -69,9 +69,28 @@ cd frontend-next && npm install && npm run dev   # http://localhost:3000
 | GET | `/teams` | all 48 teams + (learned) Elo, strongest first |
 | GET | `/groups` | live group standings |
 | GET | `/db/standings` | standings read from the database |
-| GET | `/predict?home=Spain&away=Brazil` | Poisson match prediction + scorelines |
-| GET | `/predict_ml?home=Spain&away=Brazil` | trained gradient-boosting outcome odds |
+| GET | `/predict?home=Spain&away=Brazil&use_form=true` | Poisson prediction + scorelines (current form included) |
+| GET | `/predict_ml?home=Spain&away=Brazil` | trained gradient-boosting outcome odds (feeds real form) |
 | GET | `/simulate?n=10000` | Monte Carlo title odds |
+
+## Current form
+Predictions blend each team's **base (learned) Elo** with how they're *actually
+playing in the 2026 tournament* — points-per-game and goal-difference-per-game from
+the live standings nudge the rating (capped at ±55 Elo), and the real goal-diff/game
+is fed into the trained model's form features. Add `use_form=false` to `/predict` to
+see the base-Elo number. `/teams` shows `elo`, `form_adj`, and combined `strength`.
+
+## Docker
+```bash
+docker compose up --build
+# frontend  http://localhost:3000
+# API       http://localhost:8000/docs
+# Postgres  localhost:5432  (user/pass/db = worldcup)
+```
+The backend image runs on Python 3.12 with `libgomp1`, so **XGBoost** trains and is
+selected automatically if it beats HistGradientBoosting (log loss). The Next.js
+frontend is multi-stage built and served. Compose also loads the real teams/standings
+into Postgres on startup.
 
 ## Model performance (time-based split, test = 2018+)
 | Model | Accuracy | Log loss |

@@ -17,7 +17,7 @@ from __future__ import annotations
 import random
 from collections import defaultdict
 
-from app.core.data_2026 import GROUPS, get_elo
+from app.core.data_2026 import GROUPS, get_strength
 from app.ml.poisson_model import expected_goals
 
 # Canonical matchday-3 pairings for a group ordered [0,1,2,3]:
@@ -37,7 +37,7 @@ def _sample_goals(lam: float, rng: random.Random) -> int:
 
 def _play(home: str, away: str, rng: random.Random, knockout: bool = False):
     """Simulate one match. Returns (home_goals, away_goals, winner)."""
-    lam_h, lam_a = expected_goals(get_elo(home), get_elo(away))
+    lam_h, lam_a = expected_goals(get_strength(home), get_strength(away))
     gh, ga = _sample_goals(lam_h, rng), _sample_goals(lam_a, rng)
     if gh > ga:
         winner = home
@@ -46,7 +46,7 @@ def _play(home: str, away: str, rng: random.Random, knockout: bool = False):
     else:
         if knockout:
             # extra time / penalties: settle by Elo-weighted coin flip
-            ph = get_elo(home) / (get_elo(home) + get_elo(away))
+            ph = get_strength(home) / (get_strength(home) + get_strength(away))
             winner = home if rng.random() < ph else away
         else:
             winner = None  # a draw is allowed in the group stage

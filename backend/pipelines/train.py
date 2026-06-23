@@ -30,9 +30,9 @@ from sklearn.metrics import accuracy_score, log_loss
 import joblib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))          # project root
-RAW = os.path.join(ROOT, "backend", "data", "raw", "results.csv")
-ART = os.path.join(ROOT, "backend", "app", "ml", "artifacts")
+BACKEND = os.path.dirname(HERE)                        # the backend/ directory
+RAW = os.path.join(BACKEND, "data", "raw", "results.csv")
+ART = os.path.join(BACKEND, "app", "ml", "artifacts")
 os.makedirs(ART, exist_ok=True)
 
 # --- Elo parameters (standard World-Football-Elo settings) -------------------
@@ -126,16 +126,35 @@ def main():
     print(f"LogisticRegression:  acc {accuracy_score(yte, pr_lr.argmax(1)):.3f}  "
           f"logloss {log_loss(yte, pr_lr):.3f}")
 
-    # gradient boosting
+    # gradient boosting (scikit-learn — always available)
     gb = HistGradientBoostingClassifier(max_iter=400, learning_rate=0.05,
                                         max_depth=6, l2_regularization=1.0)
     gb.fit(Xtr, ytr)
     pr_gb = gb.predict_proba(Xte)
-    print(f"HistGradientBoosting: acc {accuracy_score(yte, pr_gb.argmax(1)):.3f}  "
-          f"logloss {log_loss(yte, pr_gb):.3f}")
+    ll_gb = log_loss(yte, pr_gb)
+    print(f"HistGradientBoosting: acc {accuracy_score(yte, pr_gb.argmax(1)):.3f}  logloss {ll_gb:.3f}")
 
-    # persist the better model + the learned Elo ratings
-    joblib.dump({"model": gb, "features": FEATURES, "classes": [0, 1, 2]},
+    best_model, best_ll, best_name = gb, ll_gb, "HistGradientBoosting"
+
+    # XGBoost (used when available — e.g. inside Docker with libomp installed)
+    try:
+        from xgboost import XGBClassifier
+        xgb = XGBClassifier(n_estimators=400, learning_rate=0.05, max_depth=6,
+                            subsample=0.9, colsample_bytree=0.9, eval_metric="mlogloss",
+                            tree_method="hist")
+        xgb.fit(Xtr, ytr)
+        pr_xgb = xgb.predict_proba(Xte)
+        ll_xgb = log_loss(yte, pr_xgb)
+        print(f"XGBoost:              acc {accuracy_score(yte, pr_xgb.argmax(1)):.3f}  logloss {ll_xgb:.3f}")
+        if ll_xgb < best_ll:
+            best_model, best_ll, best_name = xgb, ll_xgb, "XGBoost"
+    except Exception as e:
+        print(f"XGBoost unavailable ({type(e).__name__}); keeping HistGradientBoosting.")
+
+    # persist the best model (by log loss) + the learned Elo ratings
+    print(f"\nBest model: {best_name} (logloss {best_ll:.3f})")
+    joblib.dump({"model": best_model, "features": FEATURES, "classes": [0, 1, 2],
+                 "algorithm": best_name},
                 os.path.join(ART, "outcome_model.joblib"))
     elo_rounded = {k: round(v, 1) for k, v in sorted(final_elo.items(), key=lambda x: -x[1])}
     with open(os.path.join(ART, "elo_ratings.json"), "w") as f:

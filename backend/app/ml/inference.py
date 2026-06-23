@@ -39,19 +39,28 @@ def has_model() -> bool:
     return _model() is not None
 
 
-def predict_outcome_ml(elo_home: float, elo_away: float, neutral: bool = True) -> dict | None:
-    """Return {away_win, draw, home_win} probabilities from the trained model."""
+def model_name() -> str:
+    bundle = _model()
+    return bundle.get("algorithm", "GradientBoosting") if bundle else "none"
+
+
+def predict_outcome_ml(elo_home: float, elo_away: float, neutral: bool = True,
+                       home_form: float = 0.0, away_form: float = 0.0) -> dict | None:
+    """Return {away_win, draw, home_win} probabilities from the trained model.
+
+    home_form / away_form are current goal-difference-per-game in the tournament,
+    fed straight into the form features the model was trained on.
+    """
     bundle = _model()
     if bundle is None:
         return None
     model = bundle["model"]
     adv = 0 if neutral else 65.0
-    # inference-time defaults: no recent-form context, treat as a competitive match
     row = [[
         (elo_home + adv) - elo_away,  # elo_diff
         elo_home, elo_away,
         1 if neutral else 0,          # neutral
-        0.0, 0.0,                     # home_form, away_form (unknown at inference)
+        home_form, away_form,         # real current-tournament form
         1,                            # competitive (World Cup)
     ]]
     proba = model.predict_proba(row)[0]
