@@ -19,40 +19,48 @@ scoreline model and a Monte Carlo. Every term that decided the title favourite w
 **Net result:** Argentina ≈ 30 % title share — a reputation artefact, not a 2026 signal.
 
 ### The fix, quantified
-Re-weight so **current-tournament performance is 60 %** of the rating and **all priors
-together are 40 %** (and Elo alone only 12 %). With
+The rating blends squad talent and priors with a **down-weighted** tournament term, and
+adds two adjustments the old model lacked — an **opponent-quality discount** (multiplicative)
+and an **injury/availability** correction:
 
 ```
-power = 0.60·tournament_elo + 0.15·form + 0.12·elo + 0.08·squad + 0.05·historical + momentum
+power = 0.30·tournament_elo + 0.25·squad + 0.20·elo + 0.15·form + 0.10·historical
+        + momentum + injury_adjustment
+adj_gd = gd_per_game · (1 + 0.55·SOS_z)        # beating weak groups counts for far less
 ```
 
-Germany's superior tournament (`tournament_elo` 2292 vs Argentina 2197) now **outweighs**
-Argentina's Elo edge:
+Two consequences that fix the bias:
+- **Reputation no longer auto-wins, but neither does a soft schedule.** Tournament weight is
+  only 30 %, so a powerhouse is not buried by a quiet group stage, *and* a team feasting on
+  weak opponents (high raw GD, negative `SOS_z`) has that margin scaled down before it
+  counts. Germany's +7 GD against a weak group is discounted and it falls to ~5th.
+- **Availability matters.** Spain underperformed with Lamine Yamal absent; an
+  `injury_adjustment` forgives part of that, so its rating reflects the fully-fit squad.
 
-```
-ΔPower(Ger−Arg) = 0.60·(2292−2197) + 0.27·(1982−2138) + momentum_diff
-                = 0.60·(+95)       + 0.27·(−156)       + (+10)
-                = +57 − 42 + 10  ≈ +25   → Germany now rated above Argentina
-```
-
-Argentina drops from a ~30 % runaway to **17.5 %, second behind Germany**, and
-overperformers (USA, Mexico, Canada) rise from the low base-Elo ranks into contention.
+Resulting order: **France, Argentina, Spain, Brazil, Germany …** with hosts USA/Mexico
+correctly mid-pack rather than top-five, and no single runaway favourite (France ~15 %).
 
 ## 2. Dynamic Power Rating (per team, Elo-equivalent units)
 
 ```
-tournament_elo = MEAN_ELO + TOURN_SPREAD · z(tournament_score)
-tournament_score = 1.00·(ppg − 1) + 0.85·adj_gd + 0.55·dominance + 0.40·over_perf
-adj_gd          = gd_per_game + 0.6·SOS_z·0.5            # strength of schedule
+weights         = tournament .30 · squad .25 · elo .20 · form .15 · historical .10
+tournament_elo  = MEAN_ELO + TOURN_SPREAD · z(tournament_score)
+tournament_score= 1.00·(ppg − 1) + 0.85·adj_gd + 0.55·dominance + 0.40·over_perf
+adj_gd          = gd_per_game · (1 + 0.55·SOS_z)         # multiplicative opponent quality
 dominance       = sign(gd)·ln(1+|gd|)                    # diminishing returns; uses xG when fed
-over_perf       = ppg − expected_ppg(base_Elo)           # momentum vs expectation
-momentum_bonus  = MOMENTUM_SPREAD · tanh(z(over_perf))   # ±90 Elo
-power           = Σ WEIGHTS·components + momentum_bonus
+over_perf       = (ppg − expected_ppg) · (1 + 0.4·SOS_z) # momentum, opponent-discounted
+momentum_bonus  = MOMENTUM_SPREAD · tanh(z(over_perf))
+power           = Σ weights·components + momentum_bonus + injury_adjustment
 ```
 
-- **MEAN_ELO=1750, TOURN_SPREAD=260, MOMENTUM_SPREAD=90.**
-- **Strength of schedule:** `SOS_z` = z-score of opponents' mean base Elo within the group.
-  Beating a tough group lifts `adj_gd`; an easy group discounts it.
+- **MEAN_ELO=1750, TOURN_SPREAD=160, MOMENTUM_SPREAD=35.**
+- **squad** = real squad-talent ratings (`SQUAD_TALENT`), not an Elo proxy — so deep-talent
+  sides (Brazil, France) are valued for their class even after a soft group stage.
+- **Strength of schedule (multiplicative):** `SOS_z` = z-score of opponents' mean base Elo
+  within the group. Goals piled up against a weak group are scaled *down*; the same margin
+  against a strong group is scaled *up*. The same discount is applied to momentum.
+- **injury_adjustment:** forgives current underperformance caused by a key absence (e.g.
+  Spain w/o Lamine Yamal), so the rating reflects the fully-fit squad.
 - **Dominance:** concave in goal difference, so 6-0 ≠ 6×(1-0). When an advanced-stats feed
   populates `MatchStats` (xG, shots, possession, big chances), dominance blends
   `0.45·gd + 0.30·xG_diff + 0.15·big_chance_diff + 0.10·possession` — a 1-0 win while

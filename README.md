@@ -75,13 +75,14 @@ cd frontend-next && npm install && npm run dev   # http://localhost:3000
 | GET | `/predict_ml?home=Spain&away=Brazil` | trained gradient-boosting outcome odds (feeds real form) |
 | GET | `/simulate?n=100000` | Monte Carlo (tournament-first), round-by-round odds |
 
-## Tournament-first power rating
-The headline rating is **60% current-2026 performance** (opponent-adjusted goal
-difference, dominance, momentum vs expectation, strength of schedule) and only **40%
-prior** (form/Elo/squad/historical, with Elo just 12%). This removes the reputation
-bias: **Germany leads, Argentina is 2nd** (not a runaway favourite), and overperformers
-like **USA, Mexico, Canada** rise from low pre-tournament ranks. Full formulas, the
-Argentina-bias math, and the validation methodology are in
+## Dynamic power rating
+The headline rating blends **squad talent (25%) + Elo (20%) + recent form (15%) +
+historical pedigree (10%)** with a deliberately down-weighted **tournament term (30%)**,
+plus two corrections: a **multiplicative opponent-quality discount** (beating weak groups
+counts for far less) and an **injury/availability** adjustment (e.g. Spain without Lamine
+Yamal). This removes the reputation bias *and* the soft-schedule bias — current order:
+**France, Argentina, Spain, Brazil, Germany**, with hosts USA/Mexico mid-pack and no
+runaway favourite (France ~15%). Full formulas, the bias math, and validation are in
 [backend/docs/MODEL.md](backend/docs/MODEL.md).
 
 ```bash

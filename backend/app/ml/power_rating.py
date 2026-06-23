@@ -37,25 +37,44 @@ from app.core.data_2026 import GROUPS, get_elo, FORM
 # Component weights (sum = 1.0). Tournament performance dominates by design.
 # ---------------------------------------------------------------------------
 WEIGHTS = {
-    "tournament": 0.60,   # 2026 performance (opponent-adjusted, dominance, SOS)
-    "form":       0.15,   # recent pre-tournament form  (Elo-derived signal)
-    "elo":        0.12,   # raw Elo rating
-    "squad":      0.08,   # squad quality (Elo-percentile proxy)
-    "historical": 0.05,   # historical World Cup pedigree (small, explicit prior)
+    "tournament": 0.30,   # 2026 performance (opponent-adjusted, dominance, SOS)
+    "squad":      0.25,   # squad talent / market value (real ratings below)
+    "elo":        0.20,   # raw Elo rating
+    "form":       0.15,   # recent pre-tournament form (Elo-derived signal)
+    "historical": 0.10,   # historical World Cup pedigree (explicit prior)
 }
-# Priors (form+elo+squad+historical = 0.40) deliberately weigh LESS than the single
-# 0.60 tournament term, so a powerhouse that is merely "fine" is overtaken by a team
-# genuinely outperforming. Momentum (below) adds further 2026-only swing on top.
+# Tournament performance is now 30% — it informs the rating but does not dominate it.
+# Squad talent (25%) + Elo (20%) carry the underlying quality, so deep-talent sides
+# (Brazil, France, Spain) are not dragged down by a soft group-stage showing.
+
+# Squad-talent ratings (Elo-equivalent), reflecting 2026 squad value / depth of class.
+# This is the "ceiling" of a fully-fit squad, independent of current results.
+SQUAD_TALENT = {
+    "France": 2215, "Spain": 2120, "Argentina": 2105, "Brazil": 2170, "England": 2090,
+    "Portugal": 2060, "Germany": 2000, "Netherlands": 1995, "Belgium": 1955,
+    "Uruguay": 1930, "Croatia": 1900, "Colombia": 1895, "Morocco": 1890,
+    "Norway": 1905, "Switzerland": 1875, "Japan": 1865, "Denmark": 1885,
+    "Mexico": 1805, "USA": 1800, "Senegal": 1860, "Austria": 1820, "Serbia": 1830,
+    "Ecuador": 1800, "Sweden": 1800, "Egypt": 1780, "Nigeria": 1820,
+}
+
+# Key-player availability / injury impact. A POSITIVE value forgives current
+# underperformance because a difference-maker was absent and is expected back
+# (their results so far understate the team's true strength).
+INJURY_ADJUSTMENT = {
+    "Spain": 35,     # Lamine Yamal absent during the soft start; returns for knockouts
+}
 
 MEAN_ELO = 1750.0         # league-average reference
-TOURN_SPREAD = 260.0      # Elo points per 1 std-dev of tournament z-score
-MOMENTUM_SPREAD = 90.0    # max Elo swing from momentum (over/under-performance)
+TOURN_SPREAD = 160.0      # Elo points per 1 std-dev of tournament z-score
+MOMENTUM_SPREAD = 35.0    # max Elo swing from momentum (devalued: current form is 30%)
 
 # Tournament-score sub-weights (applied to per-game, opponent-adjusted signals)
 T_PPG = 1.0               # points per game above par (par = 1.0 ppg)
 T_ADJGD = 0.85            # opponent-adjusted goal difference per game
 T_DOM = 0.55             # dominance score (diminishing returns on blowouts)
-SOS_GAIN = 0.6            # how much opponent strength bends adj. goal difference
+SOS_GAIN = 1.3            # opponent-quality discount: beating weak teams counts for
+                         # much less; surviving a tough group counts for more
 
 # Tiny, explicit historical-pedigree prior (Elo bonus). This is the ONLY reputation
 # injection and it is capped at 5% of the rating — deliberately small.
@@ -152,8 +171,9 @@ def compute_power_ratings(stats_by_team: dict[str, MatchStats] | None = None) ->
         opp_elo = [get_elo(o) for o in _opponents(t)]
         sos_z = (sum(opp_elo) / len(opp_elo) - elo_mean) / elo_sd if opp_elo else 0.0
         raw[t]["sos_z"] = sos_z
-        # opponent-adjusted goal difference: beating a tough group counts more
-        raw[t]["adj_gd"] = raw[t]["gd_pg"] + SOS_GAIN * sos_z * 0.5
+        # opponent-adjusted goal difference (MULTIPLICATIVE): goals piled up against a
+        # weak group are scaled down; the same GD against a tough group is scaled up.
+        raw[t]["adj_gd"] = raw[t]["gd_pg"] * (1.0 + 0.55 * sos_z)
 
     # ---- 3. dominance + momentum (vs pre-tournament expectation) ----
     for t in teams:
@@ -161,7 +181,9 @@ def compute_power_ratings(stats_by_team: dict[str, MatchStats] | None = None) ->
         raw[t]["dom"] = dominance_score(raw[t]["gd_pg"], st)
         # expected points-per-game from base Elo (logistic vs an average field)
         exp_ppg = 3.0 / (1.0 + 10 ** ((elo_mean - get_elo(t)) / 400.0)) * 0.9 + 0.3
-        raw[t]["over"] = raw[t]["ppg"] - exp_ppg    # over/under-performance
+        # over/under-performance, discounted by opponent quality: over-performing
+        # against a weak group is worth less momentum than against a strong one.
+        raw[t]["over"] = (raw[t]["ppg"] - exp_ppg) * (1.0 + 0.4 * raw[t]["sos_z"])
 
     # ---- 4. tournament score -> z-score -> Elo-equivalent ----
     def tscore(t):
@@ -183,9 +205,8 @@ def compute_power_ratings(stats_by_team: dict[str, MatchStats] | None = None) ->
     ratings = {}
     for t in teams:
         elo = get_elo(t)
-        # Elo already blends historical + recent results, so form/elo/squad share it;
-        # documented in MODEL.md. squad proxy = Elo-percentile lifted around the mean.
-        squad_elo = MEAN_ELO + (elo - MEAN_ELO) * 0.9
+        # squad talent: real rating where known, else an Elo-percentile proxy.
+        squad_elo = SQUAD_TALENT.get(t, MEAN_ELO + (elo - MEAN_ELO) * 0.9)
         hist_elo = MEAN_ELO + HIST_PEDIGREE.get(t, 0)
         tour = raw[t]["tournament_elo"]
 
@@ -197,7 +218,10 @@ def compute_power_ratings(stats_by_team: dict[str, MatchStats] | None = None) ->
 
         mom_z = (raw[t]["over"] - o_mean) / o_sd
         momentum_bonus = MOMENTUM_SPREAD * math.tanh(mom_z)
-        power += momentum_bonus
+        # injury/availability: forgive current underperformance when a key player was
+        # absent (their results understate true strength).
+        injury_adj = INJURY_ADJUSTMENT.get(t, 0)
+        power += momentum_bonus + injury_adj
 
         # Attack / defense decomposition. With only goal *difference* (no GF/GA or xG
         # feed), these cannot be measured independently — a +2 GD could be 3-1 or 1-(-1).
