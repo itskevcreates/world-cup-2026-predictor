@@ -1,0 +1,19 @@
+# Python virtual environment — huge, recreatable, never commit
+.venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Data files — too large for git; we download them separately
+backend/data/raw/*
+backend/data/processed/*
+
+# Secrets — passwords, API keys. NEVER commit these.
+.env
+
+# Mac system junk
+.DS_Store
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
