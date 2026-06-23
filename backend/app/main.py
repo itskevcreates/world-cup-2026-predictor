@@ -136,6 +136,53 @@ def simulate(n: int = Query(50000, ge=1000, le=200000)):
     return run_simulations(n=n, seed=42)
 
 
+class MatchLeg(BaseModel):
+    home: str
+    away: str
+    pick: str = Field(description="home | draw | away")
+
+
+class MatchParlayRequest(BaseModel):
+    legs: list[MatchLeg] = Field(min_length=1, max_length=12)
+
+
+@app.post("/parlay/matches")
+def parlay_matches(req: MatchParlayRequest):
+    """
+    Match-vs-match parlay. Each leg is a head-to-head pick (home/draw/away). Different
+    matches are independent events, so the parlay probability is the product of each
+    leg's win probability from the power-rating model.
+    """
+    key = {"home": "home_win", "draw": "draw", "away": "away_win"}
+    legs_out, combined = [], 1.0
+    for leg in req.legs:
+        if leg.home not in ELO or leg.away not in ELO:
+            raise HTTPException(404, f"Unknown team in {leg.home} vs {leg.away}")
+        if leg.pick not in key:
+            raise HTTPException(422, "pick must be home | draw | away")
+        pred = predict_match(leg.home, leg.away, rating_fn=power_of).as_dict()
+        prob = pred["probabilities"][key[leg.pick]]
+        combined *= prob
+        winner = leg.home if leg.pick == "home" else (leg.away if leg.pick == "away" else "Draw")
+        legs_out.append({
+            "match": f"{leg.home} vs {leg.away}", "pick": winner, "pick_type": leg.pick,
+            "probability": round(prob, 4),
+            "all_outcomes": pred["probabilities"],
+        })
+
+    def american(p):
+        if p <= 0:
+            return None
+        return round(-100 * p / (1 - p)) if p > 0.5 else round(100 * (1 - p) / p)
+
+    return {
+        "legs": legs_out,
+        "parlay_probability": round(combined, 4),
+        "fair_decimal_odds": round(1 / combined, 2) if combined > 0 else None,
+        "fair_american_odds": american(combined),
+    }
+
+
 class ParlayLeg(BaseModel):
     team: str
     market: str = Field(description="advance | r16 | quarter | semi | final | title")
